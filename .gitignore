@@ -1,0 +1,42 @@
+# Eclipse
+.project
+.classpath
+.settings
+.checkstyle
+
+# IntelliJ IDEA
+/.idea
+*.iml
+*.ipr
+*.iws
+classes
+out
+gen-external-apklibs
+
+# Android Studio
+local.properties
+/captures
+.externalNativeBuild
+
+# Gradle
+.gradle
+/build
+/local.properties
+
+# Maven
+target
+release.properties
+pom.xml.*
+
+# Ant
+bin
+gen
+build.xml
+ant.properties
+
+# Other
+.DS_Store
+Thumbs.db
+*~
+*.swp
+tmp

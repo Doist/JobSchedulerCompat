@@ -1,0 +1,24 @@
+buildscript {
+    ext.versions = [
+            gradle:         "2.2.3",
+            play_services:  "10.0.1",
+            junit:          "4.12"
+    ]
+
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:$versions.gradle"
+    }
+}
+
+allprojects {
+    repositories {
+        jcenter()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
