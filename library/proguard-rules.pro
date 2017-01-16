@@ -1,0 +1,1 @@
+-keep class com.google.android.gms.gcm.GcmNetworkManager

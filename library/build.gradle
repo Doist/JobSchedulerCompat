@@ -14,12 +14,17 @@ android {
 
     buildTypes {
         release {
-            proguardFile 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }
 
 dependencies {
+    compile "com.android.support:support-annotations:$versions.support"
     provided "com.google.android.gms:play-services-gcm:$versions.play_services"
+
     testCompile "junit:junit:$versions.junit"
+    testCompile "org.mockito:mockito-core:2.5.5"
+    testCompile "org.robolectric:robolectric:$versions.robolectric"
+    testCompile "org.robolectric:shadows-play-services:$versions.robolectric"
 }
