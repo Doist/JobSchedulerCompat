@@ -11,6 +11,8 @@ import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.RestrictTo;
 
+import java.util.concurrent.TimeUnit;
+
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public class JobSchedulerScheduler extends Scheduler {
@@ -61,23 +63,35 @@ public class JobSchedulerScheduler extends Scheduler {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             builder.setRequiredNetworkType(job.getNetworkType());
-            if (job.isRequireDeviceIdle()) {
-                builder.setRequiresDeviceIdle(true);
-            } else {
-                builder.setBackoffCriteria(job.getInitialBackoffMillis(), job.getBackoffPolicy());
-            }
+            builder.setRequiresDeviceIdle(job.isRequireDeviceIdle());
         } else {
             int networkType = job.getNetworkType();
-            networkType = networkType != JobInfo.NETWORK_TYPE_NOT_ROAMING ? networkType : JobInfo.NETWORK_TYPE_ANY;
-            builder.setRequiredNetworkType(networkType)
-                   .setBackoffCriteria(job.getInitialBackoffMillis(), job.getBackoffPolicy());
+            if (networkType == JobInfo.NETWORK_TYPE_NOT_ROAMING) {
+                networkType = JobInfo.NETWORK_TYPE_ANY;
+            }
+            builder.setRequiredNetworkType(networkType);
+
+            // Idle constraint is unavailable before N, which will crash if there are no other constraints.
+            // Set a small latency to prevent this on non-periodic jobs (periodic jobs are inherently constrained).
+            if (job.isRequireDeviceIdle() && !job.isPeriodic()) {
+                builder.setMinimumLatency(TimeUnit.MINUTES.toMillis(1));
+            }
+        }
+
+        if (job.getBackoffPolicy() != JobInfo.DEFAULT_BACKOFF_POLICY
+                || job.getInitialBackoffMillis() != JobInfo.DEFAULT_INITIAL_BACKOFF_MILLIS) {
+            builder.setBackoffCriteria(job.getInitialBackoffMillis(), job.getBackoffPolicy());
         }
 
         if (job.isPeriodic()) {
             builder.setPeriodic(job.getIntervalMillis());
         } else {
-            builder.setMinimumLatency(job.getMinLatencyMillis())
-                   .setOverrideDeadline(job.getMaxExecutionDelayMillis());
+            if (job.hasEarlyConstraint()) {
+                builder.setMinimumLatency(job.getMinLatencyMillis());
+            }
+            if (job.hasLateConstraint()) {
+                builder.setOverrideDeadline(job.getMaxExecutionDelayMillis());
+            }
         }
 
         return builder.build();
