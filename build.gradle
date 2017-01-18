@@ -1,17 +1,9 @@
 buildscript {
-    ext.versions = [
-            gradle:         "2.2.3",
-            support:        "25.1.0",
-            play_services:  "10.0.1",
-            junit:          "4.12",
-            robolectric:    "3.2.1"
-    ]
-
     repositories {
         jcenter()
     }
     dependencies {
-        classpath "com.android.tools.build:gradle:$versions.gradle"
+        classpath "com.android.tools.build:gradle:2.2.3"
     }
 }
 

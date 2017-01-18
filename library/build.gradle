@@ -1,5 +1,12 @@
 apply plugin: 'com.android.library'
 
+ext.versions = [
+        support:        "25.1.0",
+        play_services:  "10.0.1",
+        junit:          "4.12",
+        robolectric:    "3.2.1"
+]
+
 android {
     compileSdkVersion 25
     buildToolsVersion "25.0.2"
