@@ -53,22 +53,6 @@ public class PersistableBundleTest {
         assertArrayEquals(platformBundle.getDoubleArray("double_array"), bundle.getDoubleArray("double_array"), 0.01);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP_MR1)
-    public void testPersistableBundleConstructorBooleanKeysShouldFail() {
-        android.os.PersistableBundle platformBundle = new android.os.PersistableBundle();
-        platformBundle.putBoolean("boolean", true);
-        new PersistableBundle(platformBundle);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP_MR1)
-    public void testPersistableBundleConstructorBooleanArrayKeysShouldFail() {
-        android.os.PersistableBundle platformBundle = new android.os.PersistableBundle();
-        platformBundle.putBooleanArray("boolean_array", new boolean[]{true, false});
-        new PersistableBundle(platformBundle);
-    }
-
     @Test
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public void testBundleConstructor() {
@@ -111,6 +95,27 @@ public class PersistableBundleTest {
         assertEquals(map, new PersistableBundle(map, 10).toMap(10));
         map.remove("map");
         assertEquals(map, new PersistableBundle(map, 1).toMap(1));
+    }
+
+    @Test
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    public void testPersistableBundleBooleans() {
+        PersistableBundle bundle = new PersistableBundle();
+        bundle.putBoolean("boolean", true);
+        bundle.putBooleanArray("boolean_array", new boolean[]{true, false, true});
+
+        android.os.PersistableBundle platformBundle = bundle.toPersistableBundle();
+
+        PersistableBundle convertedBundle = new PersistableBundle(platformBundle);
+
+        assertEquals(bundle.getBoolean("boolean"), convertedBundle.getBoolean("boolean"));
+        assertArrayEquals(bundle.getBooleanArray("boolean_array"), convertedBundle.getBooleanArray("boolean_array"));
+    }
+
+    @Test
+    @Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.LOLLIPOP_MR1)
+    public void testPersistableBundleBooleansOnLollipop() {
+        testPersistableBundleBooleans();
     }
 
     @Test
@@ -160,6 +165,7 @@ public class PersistableBundleTest {
         bundle.putString("string", "string");
         bundle.putInt("int", 0);
         bundle.putLong("long", 0);
+        bundle.putBoolean("boolean", true);
         // Can't use double or any array, as the instances would be different and equals() would fail.
         Parcel parcel = Parcel.obtain();
         parcel.writeValue(bundle);
@@ -187,10 +193,12 @@ public class PersistableBundleTest {
             currentBundle.putInt("int", 0);
             currentBundle.putLong("long", 0);
             currentBundle.putDouble("double", 0);
+            currentBundle.putBoolean("boolean", true);
             currentBundle.putStringArray("string_array", new String[]{"one", "two", "three"});
             currentBundle.putIntArray("int_array", new int[]{1, 2, 3});
             currentBundle.putLongArray("long_array", new long[]{1, 2, 3});
             currentBundle.putDoubleArray("double_array", new double[]{1, 2, 3});
+            currentBundle.putBooleanArray("boolean_array", new boolean[]{true, false, true});
         }
         return persistableBundle;
     }
