@@ -6,6 +6,7 @@ import com.doist.jobschedulercompat.scheduler.Scheduler;
 
 import android.annotation.TargetApi;
 import android.app.job.JobScheduler;
+import android.content.ComponentName;
 import android.content.Context;
 import android.os.Build;
 import android.support.annotation.NonNull;
@@ -55,8 +56,9 @@ public class JobSchedulerScheduler extends Scheduler {
             return null;
         }
 
+        ComponentName jobService = new ComponentName(context, JobSchedulerJobService.class);
         android.app.job.JobInfo.Builder builder =
-                new android.app.job.JobInfo.Builder(job.getId(), job.getService())
+                new android.app.job.JobInfo.Builder(job.getId(), jobService)
                         .setExtras(job.getExtras().toPersistableBundle())
                         .setRequiresCharging(job.isRequireCharging())
                         .setPersisted(job.isPersisted());

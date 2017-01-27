@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config;
 
 import android.annotation.TargetApi;
 import android.app.job.JobScheduler;
+import android.content.ComponentName;
 import android.content.Context;
 import android.os.Build;
 
@@ -102,7 +103,7 @@ public class JobSchedulerSchedulerTest {
     private void assertNativeJobInfoMatchesJobInfo(android.app.job.JobInfo nativeJob, JobInfo job) {
         assertEquals(nativeJob.getId(), job.getId());
         assertEquals(new PersistableBundle(nativeJob.getExtras()).toMap(10), job.getExtras().toMap(10));
-        assertEquals(nativeJob.getService(), job.getService());
+        assertEquals(nativeJob.getService(), new ComponentName(context, JobSchedulerJobService.class));
         assertEquals(nativeJob.isRequireCharging(), job.isRequireCharging());
         assertEquals(nativeJob.isRequireDeviceIdle(), job.isRequireDeviceIdle());
         assertEquals(nativeJob.getNetworkType(), job.getNetworkType());
