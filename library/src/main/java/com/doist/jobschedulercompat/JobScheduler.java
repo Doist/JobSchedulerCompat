@@ -119,7 +119,7 @@ public class JobScheduler {
         }
     }
 
-    @RestrictTo(RestrictTo.Scope.TESTS)
+    @RestrictTo(RestrictTo.Scope.LIBRARY)
     Scheduler getBestScheduler(Context context, JobStore jobs) {
         if (isPlatformSchedulerAvailable()) {
             return new JobSchedulerScheduler(context, jobs);
