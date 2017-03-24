@@ -132,9 +132,13 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
                     || ((!jobStatus.hasNotRoamingConstraint() || DeviceUtils.isNotRoaming(this))
                     && (!jobStatus.hasIdleConstraint() || DeviceUtils.isIdle(this)))) {
                 Intent jobIntent = new Intent();
-                jobIntent.setComponent(jobStatus.getService());
+                ComponentName service = jobStatus.getService();
+                jobIntent.setComponent(service);
                 if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
                     connections.put(jobId, connection);
+                } else {
+                    Log.w(LOG_TAG, "Unable to bind to service: " + service + ". Have you declared it in the manifest?");
+                    stopJob(connection, false, true);
                 }
             } else {
                 stopJob(connection, false, true);

@@ -207,9 +207,13 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         JobParameters params = new JobParameters(jobId, jobStatus.getExtras(), jobStatus.isDeadlineSatisfied());
         Connection connection = new Connection(jobId, startId, params);
         Intent jobIntent = new Intent();
-        jobIntent.setComponent(jobStatus.getService());
+        ComponentName service = jobStatus.getService();
+        jobIntent.setComponent(service);
         if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
             connections.put(jobId, connection);
+        } else {
+            Log.w(LOG_TAG, "Unable to bind to service: " + service + ". Have you declared it in the manifest?");
+            stopJob(connection, true);
         }
     }
 
