@@ -4,7 +4,8 @@ ext.versions = [
         support:        "25.1.0",
         play_services:  "10.0.1",
         junit:          "4.12",
-        robolectric:    "3.2.1"
+        mockito:        "2.7.19",
+        robolectric:    "3.3.1"
 ]
 
 android {
@@ -31,7 +32,7 @@ dependencies {
     provided "com.google.android.gms:play-services-gcm:$versions.play_services"
 
     testCompile "junit:junit:$versions.junit"
-    testCompile "org.mockito:mockito-core:2.5.5"
+    testCompile "org.mockito:mockito-core:$versions.mockito"
     testCompile "org.robolectric:robolectric:$versions.robolectric"
     testCompile "org.robolectric:shadows-play-services:$versions.robolectric"
 }
