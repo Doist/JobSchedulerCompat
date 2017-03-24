@@ -130,7 +130,7 @@ public class JobScheduler {
         }
     }
 
-    @RestrictTo(RestrictTo.Scope.TESTS)
+    @RestrictTo(RestrictTo.Scope.LIBRARY)
     Scheduler getSchedulerForTag(String tag, Context context, JobStore jobStore) {
         switch (tag) {
             case JobSchedulerScheduler.TAG:
