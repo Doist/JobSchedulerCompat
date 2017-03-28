@@ -98,7 +98,11 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
      */
     private void stopJob(Connection connection, boolean needsReschedule) {
         connections.remove(connection.jobId);
-        unbindService(connection);
+        try {
+            unbindService(connection);
+        } catch (IllegalArgumentException e) {
+            // Service not registered at this point. Drop it.
+        }
         jobFinished(connection.params, needsReschedule);
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
     }

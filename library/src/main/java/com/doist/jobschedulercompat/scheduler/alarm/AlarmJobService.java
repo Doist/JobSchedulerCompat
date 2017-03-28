@@ -222,7 +222,11 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
      */
     private void stopJob(Connection connection, boolean needsReschedule) {
         connections.remove(connection.jobId);
-        unbindService(connection);
+        try {
+            unbindService(connection);
+        } catch (IllegalArgumentException e) {
+            // Service not registered at this point. Drop it.
+        }
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
         stopSelf(connection.startId);
         WakeLockUtils.releaseWakeLock(KEY_WAKE_LOCK_JOB);

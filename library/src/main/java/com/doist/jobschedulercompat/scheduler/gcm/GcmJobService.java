@@ -151,7 +151,11 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
      */
     private void stopJob(Connection connection, boolean success, boolean needsReschedule) {
         connections.remove(connection.jobId);
-        unbindService(connection);
+        try {
+            unbindService(connection);
+        } catch (IllegalArgumentException e) {
+            // Service not registered at this point. Drop it.
+        }
         try {
             connection.callback.taskFinished(
                     success ? RESULT_SUCCESS : (needsReschedule ? RESULT_RESCHEDULE : RESULT_FAILURE));
