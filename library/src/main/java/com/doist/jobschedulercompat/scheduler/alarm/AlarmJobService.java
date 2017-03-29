@@ -5,7 +5,6 @@ import com.doist.jobschedulercompat.JobScheduler;
 import com.doist.jobschedulercompat.JobService;
 import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.util.DeviceUtils;
-import com.doist.jobschedulercompat.util.WakeLockUtils;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
@@ -17,6 +16,7 @@ import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.support.annotation.RestrictTo;
@@ -36,19 +36,25 @@ import java.util.concurrent.TimeUnit;
 public class AlarmJobService extends Service implements JobService.Binder.Callback {
     private static final String LOG_TAG = "AlarmJobService";
 
-    private static final String KEY_WAKE_LOCK_PROCESS = "process";
-    private static final String KEY_WAKE_LOCK_JOB = "job";
+    private static final String TAG_WAKE_LOCK_PROCESS = "process";
+    private static final String TAG_WAKE_LOCK_JOB = "job";
 
     private static final long TIMEOUT_WAKE_LOCK_PROCESS = TimeUnit.MINUTES.toMillis(1);
     private static final long TIMEOUT_WAKE_LOCK_JOB = TimeUnit.MINUTES.toMillis(3); // Same as JobScheduler's.
 
+    private static PowerManager.WakeLock wakeLockProcess;
+
     static void start(Context context) {
-        WakeLockUtils.acquireWakeLock(context, KEY_WAKE_LOCK_PROCESS, TIMEOUT_WAKE_LOCK_PROCESS);
+        if (wakeLockProcess == null) {
+            wakeLockProcess = getWakeLock(context, TAG_WAKE_LOCK_PROCESS);
+        }
+        wakeLockProcess.acquire(TIMEOUT_WAKE_LOCK_PROCESS);
         context.startService(new Intent(context, AlarmJobService.class));
     }
 
     private JobScheduler jobScheduler;
-    private final SparseArray<Connection> connections = new SparseArray<>();
+    private SparseArray<Connection> connections;
+    private PowerManager.WakeLock wakeLockJob;
 
     @Nullable
     @Override
@@ -60,6 +66,9 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
     public void onCreate() {
         super.onCreate();
         jobScheduler = JobScheduler.get(this);
+        connections = new SparseArray<>();
+        wakeLockJob = getWakeLock(this, TAG_WAKE_LOCK_JOB);
+
     }
 
     @Override
@@ -98,7 +107,7 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
             }
 
             // Each job holds its own wake lock while processing, release ours now.
-            WakeLockUtils.releaseWakeLock(KEY_WAKE_LOCK_PROCESS);
+            wakeLockProcess.release();
         }
         return START_NOT_STICKY;
     }
@@ -202,7 +211,7 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
      * Starts the user's {@link JobService} by binding to it.
      */
     private void startJob(JobStatus jobStatus, int startId) {
-        WakeLockUtils.acquireWakeLock(this, KEY_WAKE_LOCK_JOB, TIMEOUT_WAKE_LOCK_JOB);
+        wakeLockJob.acquire(TIMEOUT_WAKE_LOCK_JOB);
         int jobId = jobStatus.getJobId();
         JobParameters params = new JobParameters(jobId, jobStatus.getExtras(), jobStatus.isDeadlineSatisfied());
         Connection connection = new Connection(jobId, startId, params);
@@ -229,7 +238,12 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         }
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
         stopSelf(connection.startId);
-        WakeLockUtils.releaseWakeLock(KEY_WAKE_LOCK_JOB);
+        wakeLockJob.release();
+    }
+
+    private static PowerManager.WakeLock getWakeLock(Context context, String tag) {
+        PowerManager powerManager = (PowerManager) context.getSystemService(POWER_SERVICE);
+        return powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jsc:" + tag);
     }
 
     private static void setComponentEnabled(Context context, Class cls, boolean enabled) {
