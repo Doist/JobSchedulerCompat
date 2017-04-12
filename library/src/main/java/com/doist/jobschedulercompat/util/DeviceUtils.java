@@ -41,7 +41,8 @@ public class DeviceUtils {
     }
 
     public static boolean isNotRoaming(Context context) {
-        return isConnected(context) && !getActiveNetworkInfo(context).isRoaming();
+        NetworkInfo info = getActiveNetworkInfo(context);
+        return info != null && info.isConnected() && !info.isRoaming();
     }
 
     public static boolean isUnmetered(Context context) {
