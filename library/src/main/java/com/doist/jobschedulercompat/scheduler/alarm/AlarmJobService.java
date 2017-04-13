@@ -68,7 +68,6 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         jobScheduler = JobScheduler.get(this);
         connections = new SparseArray<>();
         wakeLockJob = getWakeLock(this, TAG_WAKE_LOCK_JOB);
-
     }
 
     @Override
@@ -107,7 +106,9 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
             }
 
             // Each job holds its own wake lock while processing, release ours now.
-            wakeLockProcess.release();
+            if (wakeLockProcess.isHeld()) {
+                wakeLockProcess.release();
+            }
         }
         return START_NOT_STICKY;
     }
@@ -238,7 +239,9 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         }
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
         stopSelf(connection.startId);
-        wakeLockJob.release();
+        if (wakeLockJob.isHeld()) {
+            wakeLockJob.release();
+        }
     }
 
     private static PowerManager.WakeLock getWakeLock(Context context, String tag) {
