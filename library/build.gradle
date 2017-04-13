@@ -2,10 +2,10 @@ apply plugin: 'com.android.library'
 
 ext.versions = [
         support:        "25.3.1",
-        play_services:  "10.0.1",
+        play_services:  "10.2.1",
         junit:          "4.12",
         mockito:        "2.7.19",
-        robolectric:    "3.3.1"
+        robolectric:    "3.3.2"
 ]
 
 android {
