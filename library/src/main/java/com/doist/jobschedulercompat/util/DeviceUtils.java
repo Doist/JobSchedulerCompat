@@ -36,24 +36,20 @@ public class DeviceUtils {
     }
 
     public static boolean isConnected(Context context) {
-        NetworkInfo info = getActiveNetworkInfo(context);
+        ConnectivityManager manager = (ConnectivityManager) context.getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo info = manager.getActiveNetworkInfo();
         return info != null && info.isConnected();
     }
 
     public static boolean isNotRoaming(Context context) {
-        NetworkInfo info = getActiveNetworkInfo(context);
+        ConnectivityManager manager = (ConnectivityManager) context.getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo info = manager.getActiveNetworkInfo();
         return info != null && info.isConnected() && !info.isRoaming();
     }
 
     public static boolean isUnmetered(Context context) {
-        return isConnected(context) && !getConnectivityManager(context).isActiveNetworkMetered();
-    }
-
-    private static ConnectivityManager getConnectivityManager(Context context) {
-        return (ConnectivityManager) context.getSystemService(CONNECTIVITY_SERVICE);
-    }
-
-    private static NetworkInfo getActiveNetworkInfo(Context context) {
-        return getConnectivityManager(context).getActiveNetworkInfo();
+        ConnectivityManager manager = (ConnectivityManager) context.getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo info = manager.getActiveNetworkInfo();
+        return info != null && info.isConnected() && !manager.isActiveNetworkMetered();
     }
 }
