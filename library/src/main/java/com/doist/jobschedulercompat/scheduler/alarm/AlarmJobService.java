@@ -44,6 +44,9 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
 
     private static PowerManager.WakeLock wakeLockProcess;
 
+    /**
+     * Start {@link AlarmJobService} while holding a wake lock to process pending jobs.
+     */
     static void start(Context context) {
         if (wakeLockProcess == null) {
             wakeLockProcess = getWakeLock(context, TAG_WAKE_LOCK_PROCESS);
@@ -106,7 +109,7 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
             }
 
             // Each job holds its own wake lock while processing, release ours now.
-            if (wakeLockProcess.isHeld()) {
+            if (wakeLockProcess != null && wakeLockProcess.isHeld()) {
                 wakeLockProcess.release();
             }
         }
