@@ -31,7 +31,7 @@ import static org.junit.Assert.assertEquals;
 @RunWith(RobolectricTestRunner.class)
 @Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowNetworkInfo.class})
 public class AlarmJobServiceTest {
-    private static final long THREAD_WAIT_MS = 80;
+    private static final long THREAD_WAIT_MS = 100;
     private static long DELAY_MS = 2000;
     private static long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
 

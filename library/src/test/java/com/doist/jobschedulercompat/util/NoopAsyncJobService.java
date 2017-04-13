@@ -6,7 +6,7 @@ import com.doist.jobschedulercompat.JobService;
 import android.util.SparseArray;
 
 public class NoopAsyncJobService extends JobService {
-    private static final long THREAD_WAIT_MS = 80;
+    private static final long THREAD_WAIT_MS = 100;
 
     public static final String EXTRA_DELAY = "delay";
 

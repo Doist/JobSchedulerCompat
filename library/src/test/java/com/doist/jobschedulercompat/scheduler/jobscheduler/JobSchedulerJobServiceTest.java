@@ -30,7 +30,7 @@ import static org.junit.Assert.assertEquals;
 @RunWith(RobolectricTestRunner.class)
 @Config(constants = BuildConfig.class, shadows = {ShadowJobParameters.class, ShadowNetworkInfo.class})
 public class JobSchedulerJobServiceTest {
-    private static final long THREAD_WAIT_MS = 80;
+    private static final long THREAD_WAIT_MS = 100;
     private static final long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
 
     private Context context;

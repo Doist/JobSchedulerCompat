@@ -20,7 +20,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(RobolectricTestRunner.class)
 @Config(constants = BuildConfig.class)
 public class JobServiceTest {
-    private static final long THREAD_WAIT_MS = 80;
+    private static final long THREAD_WAIT_MS = 100;
     private static final Object THREAD_LOCK = new Object();
 
     private JobParameters params = new JobParameters(0, PersistableBundle.EMPTY, false);

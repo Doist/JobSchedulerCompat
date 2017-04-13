@@ -42,7 +42,7 @@ import static org.junit.Assert.assertEquals;
 @Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
         shadows = {ShadowGoogleApiAvailability.class, ShadowNetworkInfo.class})
 public class GcmJobServiceTest {
-    private static final long THREAD_WAIT_MS = 80;
+    private static final long THREAD_WAIT_MS = 100;
 
     private Context context;
     private JobStore jobStore;
