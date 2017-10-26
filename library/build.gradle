@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 
 ext.versions = [
-        support:        "25.3.1",
+        support:        "26.1.0",
         play_services:  "10.2.1",
         junit:          "4.12",
         mockito:        "2.7.19",
@@ -9,12 +9,12 @@ ext.versions = [
 ]
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+    compileSdkVersion 26
+    buildToolsVersion "26.0.2"
 
     defaultConfig {
         minSdkVersion 16
-        targetSdkVersion 25
+        targetSdkVersion 26
 
         versionCode 1
         versionName "1.0"
