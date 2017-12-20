@@ -1,11 +1,11 @@
 package com.doist.jobschedulercompat.scheduler.jobscheduler;
 
+import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.JobParameters;
 import com.doist.jobschedulercompat.JobScheduler;
 import com.doist.jobschedulercompat.JobService;
 import com.doist.jobschedulercompat.PersistableBundle;
 import com.doist.jobschedulercompat.job.JobStatus;
-import com.doist.jobschedulercompat.util.DeviceUtils;
 
 import android.annotation.TargetApi;
 import android.content.ComponentName;
@@ -18,16 +18,16 @@ import android.util.Log;
 import android.util.SparseArray;
 
 /**
- * Job service for {@link JobSchedulerScheduler}, the {@link android.app.job.JobScheduler}-based scheduler.
+ * Job service for {@link JobSchedulerSchedulerV21}, the {@link android.app.job.JobScheduler}-based scheduler.
  *
  * This service runs whenever {@link android.app.job.JobScheduler} starts it based on the current jobs and constraints.
  */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public class JobSchedulerJobService extends android.app.job.JobService implements JobService.Binder.Callback {
-    private static final String LOG_TAG = "JobSchedulerJobService";
+    private static final String LOG_TAG = "PlatformJobService";
 
-    private JobScheduler jobScheduler;
+    protected JobScheduler jobScheduler;
     private final SparseArray<Connection> connections = new SparseArray<>();
 
     @Override
@@ -65,29 +65,19 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
 
     /**
      * Starts the user's {@link JobService} by binding to it.
-     *
-     * Given the roaming constraint was unsupported before {@link Build.VERSION_CODES#N}, it is handled manually.
      */
     private void startJob(android.app.job.JobParameters params) {
         int jobId = params.getJobId();
         JobStatus jobStatus = jobScheduler.getJob(jobId);
         if (jobStatus != null) {
             Connection connection = new Connection(jobId, params);
-            // For N and above, constraints are handled by the system.
-            // For all others, handle roaming and idle constraints manually, while respecting the deadline.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N || params.isOverrideDeadlineExpired()
-                    || ((!jobStatus.hasNotRoamingConstraint() || DeviceUtils.isNotRoaming(this))
-                    && (!jobStatus.hasIdleConstraint() || DeviceUtils.isIdle(this)))) {
-                Intent jobIntent = new Intent();
-                ComponentName service = jobStatus.getService();
-                jobIntent.setComponent(service);
-                if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
-                    connections.put(jobId, connection);
-                } else {
-                    Log.w(LOG_TAG, "Unable to bind to service: " + service + ". Have you declared it in the manifest?");
-                    stopJob(connection, true);
-                }
+            Intent jobIntent = new Intent();
+            ComponentName service = jobStatus.getServiceComponent();
+            jobIntent.setComponent(service);
+            if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
+                connections.put(jobId, connection);
             } else {
+                Log.w(LOG_TAG, "Unable to bind to service: " + service + ". Have you declared it in the manifest?");
                 stopJob(connection, true);
             }
         }
@@ -108,8 +98,24 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
     }
 
     private JobParameters toLocalParameters(android.app.job.JobParameters params) {
-        return new JobParameters(
-                params.getJobId(), new PersistableBundle(params.getExtras()), params.isOverrideDeadlineExpired());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return new JobParameters(
+                    params.getJobId(), new PersistableBundle(params.getExtras()), params.getTransientExtras(),
+                    params.isOverrideDeadlineExpired(), params.getTriggeredContentUris(),
+                    params.getTriggeredContentAuthorities());
+        } else {
+            JobInfo job = jobScheduler.getJob(params.getJobId()).getJob();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                return new JobParameters(
+                        params.getJobId(), new PersistableBundle(params.getExtras()), job.getTransientExtras(),
+                        params.isOverrideDeadlineExpired(), params.getTriggeredContentUris(),
+                        params.getTriggeredContentAuthorities());
+            } else {
+                return new JobParameters(
+                        params.getJobId(), new PersistableBundle(params.getExtras()), job.getTransientExtras(),
+                        params.isOverrideDeadlineExpired(), null, null);
+            }
+        }
     }
 
     /**

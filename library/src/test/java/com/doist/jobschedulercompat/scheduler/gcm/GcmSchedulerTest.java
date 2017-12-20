@@ -5,12 +5,9 @@ import com.google.android.gms.common.ConnectionResult;
 import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
-import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.util.JobCreator;
-import com.doist.jobschedulercompat.util.NoopAsyncJobService;
 import com.doist.jobschedulercompat.util.ShadowGoogleApiAvailability;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -24,6 +21,7 @@ import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 
@@ -32,13 +30,15 @@ import java.util.concurrent.TimeUnit;
 
 import static com.doist.jobschedulercompat.scheduler.gcm.GcmScheduler.PARAM_REQUIRES_CHARGING;
 import static org.hamcrest.Matchers.instanceOf;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowGoogleApiAvailability.class})
+@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
+        shadows = {ShadowGoogleApiAvailability.class})
 public class GcmSchedulerTest {
     private Context context;
     private GcmScheduler scheduler;
@@ -51,22 +51,17 @@ public class GcmSchedulerTest {
     @Before
     public void setup() {
         context = RuntimeEnvironment.application;
-        scheduler = new GcmScheduler(context, JobStore.get(context));
-    }
-
-    @After
-    public void teardown() {
-        NoopAsyncJobService.stopAll();
+        scheduler = new GcmScheduler(context);
     }
 
     @Test
     public void testScheduleBroadcasts() {
         JobInfo job = JobCreator.create(context, 0)
-                .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
-                .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
-                .setPersisted(true)
-                .build();
+                                .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
+                                .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
+                                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                                .setPersisted(true)
+                                .build();
         scheduler.schedule(job);
 
         Intent intent = getLastBroadcastIntent();
@@ -76,10 +71,12 @@ public class GcmSchedulerTest {
         PersistableBundle extras = new PersistableBundle();
         extras.putString("test", "test");
         job = JobCreator.create(context, 1)
-                .setRequiresCharging(true)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setExtras(extras)
-                .build();
+                        .setExtras(extras)
+                        .setPeriodic(TimeUnit.MINUTES.toMillis(30))
+                        .setRequiresCharging(true)
+                        .setRequiresDeviceIdle(true)
+                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                        .build();
         scheduler.schedule(job);
 
         intent = getLastBroadcastIntent();
@@ -87,10 +84,12 @@ public class GcmSchedulerTest {
         assertIntentMatchesJobInfo(intent, job);
 
         job = JobCreator.create(context, 2)
-                .setPeriodic(TimeUnit.MINUTES.toMillis(30))
-                .setRequiresDeviceIdle(true)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
-                .build();
+                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
+                        .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("doist.com"), 0))
+                        .addTriggerContentUri(new JobInfo.TriggerContentUri(
+                                Uri.parse("todoist.com"), JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
+                        .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("twistapp.com"), 0))
+                        .build();
         scheduler.schedule(job);
 
         intent = getLastBroadcastIntent();
@@ -162,23 +161,40 @@ public class GcmSchedulerTest {
                                  intent.getLongExtra(GcmScheduler.PARAM_TRIGGER_WINDOW_END, -1L));
                 }
             }
+        } else if (job.getTriggerContentUris() != null) {
+            JobInfo.TriggerContentUri[] triggerContentUris = job.getTriggerContentUris();
+            int size = triggerContentUris.length;
+            Uri[] uriArray = new Uri[size];
+            int[] flagsArray = new int[size];
+            for (int i = 0; i < size; i++) {
+                JobInfo.TriggerContentUri triggerContentUri = triggerContentUris[i];
+                uriArray[i] = triggerContentUri.getUri();
+                flagsArray[i] = triggerContentUri.getFlags();
+            }
+            assertEquals(GcmScheduler.TRIGGER_TYPE_CONTENT_URI,
+                         intent.getIntExtra(GcmScheduler.PARAM_TRIGGER_TYPE, -1));
+            assertArrayEquals(uriArray, intent.getParcelableArrayExtra(GcmScheduler.PARAM_CONTENT_URI_ARRAY));
+            assertArrayEquals(flagsArray, intent.getIntArrayExtra(GcmScheduler.PARAM_CONTENT_URI_FLAGS_ARRAY));
         } else {
             assertEquals(GcmScheduler.TRIGGER_TYPE_IMMEDIATE,
                          intent.getIntExtra(GcmScheduler.PARAM_TRIGGER_TYPE, -1));
             assertEquals(0L, intent.getLongExtra(GcmScheduler.PARAM_TRIGGER_WINDOW_START, -1L));
-            assertEquals(0L, intent.getLongExtra(GcmScheduler.PARAM_TRIGGER_WINDOW_END, -1L));
+            assertEquals(1L, intent.getLongExtra(GcmScheduler.PARAM_TRIGGER_WINDOW_END, -1L));
         }
 
         assertEquals(job.isRequireCharging(), intent.getBooleanExtra(PARAM_REQUIRES_CHARGING, false));
         int requiredNetwork = GcmScheduler.NETWORK_STATE_ANY;
         switch (job.getNetworkType()) {
             case JobInfo.NETWORK_TYPE_ANY:
-            case JobInfo.NETWORK_TYPE_NOT_ROAMING:
                 requiredNetwork = GcmScheduler.NETWORK_STATE_CONNECTED;
                 break;
 
             case JobInfo.NETWORK_TYPE_UNMETERED:
                 requiredNetwork = GcmScheduler.NETWORK_STATE_UNMETERED;
+                break;
+
+            default:
+                requiredNetwork = GcmScheduler.NETWORK_STATE_ANY;
                 break;
         }
         assertEquals(requiredNetwork, intent.getIntExtra(GcmScheduler.PARAM_REQUIRED_NETWORK, -1));

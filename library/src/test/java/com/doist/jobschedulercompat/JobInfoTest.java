@@ -10,6 +10,8 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 import android.content.ComponentName;
+import android.net.Uri;
+import android.os.Bundle;
 
 import java.util.concurrent.TimeUnit;
 
@@ -64,6 +66,30 @@ public class JobInfoTest {
         new JobInfo.Builder(0, component)
                 .setRequiresDeviceIdle(true)
                 .setBackoffCriteria(TimeUnit.MINUTES.toMillis(15), JobInfo.BACKOFF_POLICY_LINEAR)
+                .build();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testPeriodicWithTriggerContentUriShouldFail() {
+        new JobInfo.Builder(0, component)
+                .setPeriodic(TimeUnit.MINUTES.toMillis(15))
+                .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("com.doist"), 0))
+                .build();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testPersistedWithTriggerContentUriShouldFail() {
+        new JobInfo.Builder(0, component)
+                .setPersisted(true)
+                .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("com.doist"), 0))
+                .build();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testPersistedWithTransientExtrasShouldFail() {
+        new JobInfo.Builder(0, component)
+                .setPersisted(true)
+                .setTransientExtras(new Bundle())
                 .build();
     }
 }

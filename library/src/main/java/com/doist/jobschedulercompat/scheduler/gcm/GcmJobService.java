@@ -2,8 +2,6 @@ package com.doist.jobschedulercompat.scheduler.gcm;
 
 import com.google.android.gms.gcm.GcmNetworkManager;
 import com.google.android.gms.gcm.GcmTaskService;
-import com.google.android.gms.gcm.INetworkTaskCallback;
-import com.google.android.gms.gcm.PendingCallback;
 import com.google.android.gms.gcm.Task;
 import com.google.android.gms.gcm.TaskParams;
 
@@ -13,15 +11,15 @@ import com.doist.jobschedulercompat.JobScheduler;
 import com.doist.jobschedulercompat.JobService;
 import com.doist.jobschedulercompat.PersistableBundle;
 import com.doist.jobschedulercompat.job.JobStatus;
-import com.doist.jobschedulercompat.util.DeviceUtils;
 
 import android.app.Service;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.Parcelable;
+import android.os.Parcel;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.support.annotation.Nullable;
@@ -44,13 +42,12 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
     /** @see GcmTaskService#onInitializeTasks() */
     static final String ACTION_INITIALIZE = "com.google.android.gms.gcm.SERVICE_ACTION_INITIALIZE";
 
-    static final String EXTRA_TAG = "tag";
-    static final String EXTRA_EXTRAS = "extras";
-    static final String EXTRA_CALLBACK = "callback";
-
     private static final int RESULT_SUCCESS = 0;
     private static final int RESULT_RESCHEDULE = 1;
     private static final int RESULT_FAILURE = 2;
+
+    private static final String DESCRIPTOR = "com.google.android.gms.gcm.INetworkTaskCallback";
+    private static final int TRANSACTION_TASK_FINISHED = IBinder.FIRST_CALL_TRANSACTION + 1;
 
     private JobScheduler jobScheduler;
     private final SparseArray<Connection> connections = new SparseArray<>();
@@ -72,18 +69,13 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
         if (intent != null) {
             try {
                 String action = intent.getAction();
-                switch (action) {
+                if (ACTION_INITIALIZE.equals(action)) {
                     // Schedule all existing jobs per GcmNetworkManager's request.
-                    case ACTION_INITIALIZE:
-                        for (JobInfo job : jobScheduler.getAllPendingJobs()) {
-                            jobScheduler.schedule(job);
-                        }
-                        break;
-
-                    // Start the job specified in the Intent.
-                    case ACTION_EXECUTE:
-                        startJob(intent, startId);
-                        break;
+                    for (JobInfo job : jobScheduler.getAllPendingJobs()) {
+                        jobScheduler.schedule(job);
+                    }
+                } else if (ACTION_EXECUTE.equals(action)) {
+                    startJob(intent, startId);
                 }
             } finally {
                 if (connections.size() == 0) {
@@ -111,36 +103,42 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
      * @param intent {@link GcmNetworkManager}'s intent, whose extras contain the parameters and callback.
      */
     private void startJob(Intent intent, int startId) {
-        String tag = intent.getStringExtra(EXTRA_TAG);
-        Bundle extras = intent.getBundleExtra(EXTRA_EXTRAS);
-        intent.setExtrasClassLoader(PendingCallback.class.getClassLoader());
-        Parcelable parcelledCallback = intent.getParcelableExtra(EXTRA_CALLBACK);
-        if (tag == null || extras == null || !(parcelledCallback instanceof PendingCallback)) {
+        GcmIntentParser parser;
+        try {
+            parser = new GcmIntentParser(intent.getExtras());
+        } catch (RuntimeException e) {
             // Invalid extras. Bail out.
             return;
         }
-        int jobId = Integer.valueOf(tag);
+
+        int jobId = parser.getJobId();
+        Bundle extras = parser.getExtras();
+        Uri[] triggeredUris = null;
+        if (parser.getTriggeredContentUris() != null) {
+            triggeredUris = new Uri[parser.getTriggeredContentUris().size()];
+            parser.getTriggeredContentUris().toArray(triggeredUris);
+        }
+        String[] triggeredAuthorities = null;
+        if (parser.getTriggeredContentAuthorities() != null) {
+            triggeredAuthorities = new String[parser.getTriggeredContentAuthorities().size()];
+            parser.getTriggeredContentAuthorities().toArray(triggeredAuthorities);
+        }
+        IBinder callback = parser.getCallback();
+
         JobStatus jobStatus = jobScheduler.getJob(jobId);
         if (jobStatus != null) {
-            boolean isOverrideDeadlineExpired = isOverrideDeadlineExpired(jobStatus);
-            JobParameters params = new JobParameters(jobId, new PersistableBundle(extras), isOverrideDeadlineExpired);
-            INetworkTaskCallback callback =
-                    INetworkTaskCallback.Stub.asInterface(((PendingCallback) parcelledCallback).getIBinder());
+            JobInfo job = jobStatus.getJob();
+            JobParameters params = new JobParameters(
+                    jobId, new PersistableBundle(extras), job.getTransientExtras(),
+                    isOverrideDeadlineExpired(jobStatus), triggeredUris, triggeredAuthorities);
             Connection connection = new Connection(jobId, startId, params, callback);
-            // Handle not roaming and idle constraints manually, while respecting the deadline.
-            if (isOverrideDeadlineExpired
-                    || ((!jobStatus.hasNotRoamingConstraint() || DeviceUtils.isNotRoaming(this))
-                    && (!jobStatus.hasIdleConstraint() || DeviceUtils.isIdle(this)))) {
-                Intent jobIntent = new Intent();
-                ComponentName service = jobStatus.getService();
-                jobIntent.setComponent(service);
-                if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
-                    connections.put(jobId, connection);
-                } else {
-                    Log.w(LOG_TAG, "Unable to bind to service: " + service + ". Have you declared it in the manifest?");
-                    stopJob(connection, false, true);
-                }
+            Intent jobIntent = new Intent();
+            ComponentName service = jobStatus.getServiceComponent();
+            jobIntent.setComponent(service);
+            if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
+                connections.put(jobId, connection);
             } else {
+                Log.w(LOG_TAG, "Unable to bind to service: " + service + ". Have you declared it in the manifest?");
                 stopJob(connection, false, true);
             }
         }
@@ -156,11 +154,18 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
         } catch (IllegalArgumentException e) {
             // Service not registered at this point. Drop it.
         }
+        Parcel request = Parcel.obtain();
+        Parcel response = Parcel.obtain();
         try {
-            connection.callback.taskFinished(
-                    success ? RESULT_SUCCESS : (needsReschedule ? RESULT_RESCHEDULE : RESULT_FAILURE));
-        } catch (RemoteException | NullPointerException e) {
+            request.writeInterfaceToken(DESCRIPTOR);
+            response.writeInt(success ? RESULT_SUCCESS : (needsReschedule ? RESULT_RESCHEDULE : RESULT_FAILURE));
+            connection.remote.transact(TRANSACTION_TASK_FINISHED, request, response, 0);
+            response.readException();
+        } catch (RemoteException | RuntimeException e) {
             Log.w(LOG_TAG, "Encountered error while running the callback", e);
+        } finally {
+            request.recycle();
+            response.recycle();
         }
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
         stopSelf(connection.startId);
@@ -184,15 +189,15 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
         private final int jobId;
         private final int startId;
         private final JobParameters params;
-        private final INetworkTaskCallback callback;
+        private final IBinder remote;
 
         private JobService.Binder binder;
 
-        private Connection(int jobId, int startId, JobParameters params, INetworkTaskCallback callback) {
+        private Connection(int jobId, int startId, JobParameters params, IBinder remote) {
             this.jobId = jobId;
             this.startId = startId;
             this.params = params;
-            this.callback = callback;
+            this.remote = remote;
         }
 
         @Override

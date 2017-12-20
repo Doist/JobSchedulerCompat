@@ -1,7 +1,6 @@
 package com.doist.jobschedulercompat.scheduler.jobscheduler;
 
 import com.doist.jobschedulercompat.JobInfo;
-import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.scheduler.Scheduler;
 
 import android.annotation.TargetApi;
@@ -12,36 +11,31 @@ import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.RestrictTo;
 
-import java.util.concurrent.TimeUnit;
-
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 @RestrictTo(RestrictTo.Scope.LIBRARY)
-public class JobSchedulerScheduler extends Scheduler {
-    public static final String TAG = "PlatformScheduler";
+public class JobSchedulerSchedulerV21 extends Scheduler {
+    public static final String TAG = "PlatformSchedulerV21";
 
     private JobScheduler jobScheduler;
 
-    public JobSchedulerScheduler(Context context, JobStore jobs) {
-        super(context, jobs);
+    public JobSchedulerSchedulerV21(Context context) {
+        super(context);
         jobScheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
     }
 
     @Override
     public int schedule(JobInfo job) {
-        super.schedule(job);
-        int result = jobScheduler.schedule(toPlatformJob(job));
+        int result = jobScheduler.schedule(toPlatformJob(job).build());
         return result == JobScheduler.RESULT_SUCCESS ? RESULT_SUCCESS : RESULT_FAILURE;
     }
 
     @Override
     public void cancel(int jobId) {
-        super.cancel(jobId);
         jobScheduler.cancel(jobId);
     }
 
     @Override
     public void cancelAll() {
-        super.cancelAll();
         jobScheduler.cancelAll();
     }
 
@@ -51,38 +45,23 @@ public class JobSchedulerScheduler extends Scheduler {
         return TAG;
     }
 
-    private android.app.job.JobInfo toPlatformJob(JobInfo job) {
+    protected android.app.job.JobInfo.Builder toPlatformJob(JobInfo job) {
         if (job == null) {
             return null;
         }
 
+        // Create builder with all parameters available across all sdks.
         ComponentName jobService = new ComponentName(context, JobSchedulerJobService.class);
         android.app.job.JobInfo.Builder builder =
                 new android.app.job.JobInfo.Builder(job.getId(), jobService)
                         .setExtras(job.getExtras().toPersistableBundle())
+                        .setRequiredNetworkType(job.getNetworkType())
                         .setRequiresCharging(job.isRequireCharging())
-                        .setPersisted(job.isPersisted());
+                        .setRequiresDeviceIdle(job.isRequireDeviceIdle());
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setRequiredNetworkType(job.getNetworkType());
-            builder.setRequiresDeviceIdle(job.isRequireDeviceIdle());
-        } else {
-            int networkType = job.getNetworkType();
-            if (networkType == JobInfo.NETWORK_TYPE_NOT_ROAMING) {
-                networkType = JobInfo.NETWORK_TYPE_ANY;
-            }
-            builder.setRequiredNetworkType(networkType);
-
-            // Idle constraint is unavailable before N, which will crash if there are no other constraints.
-            // Set a small latency to prevent this on non-periodic jobs (periodic jobs are inherently constrained).
-            if (job.isRequireDeviceIdle() && !job.isPeriodic()) {
-                builder.setMinimumLatency(TimeUnit.MINUTES.toMillis(1));
-            }
-        }
-
-        if (job.getBackoffPolicy() != JobInfo.DEFAULT_BACKOFF_POLICY
-                || job.getInitialBackoffMillis() != JobInfo.DEFAULT_INITIAL_BACKOFF_MILLIS) {
-            builder.setBackoffCriteria(job.getInitialBackoffMillis(), job.getBackoffPolicy());
+        // Persisting jobs requires the RECEIVE_BOOT_COMPLETED. Only proxy the call if set.
+        if (job.isPersisted()) {
+            builder.setPersisted(true);
         }
 
         if (job.isPeriodic()) {
@@ -96,6 +75,11 @@ public class JobSchedulerScheduler extends Scheduler {
             }
         }
 
-        return builder.build();
+        if (job.getBackoffPolicy() != JobInfo.DEFAULT_BACKOFF_POLICY
+                || job.getInitialBackoffMillis() != JobInfo.DEFAULT_INITIAL_BACKOFF_MILLIS) {
+            builder.setBackoffCriteria(job.getInitialBackoffMillis(), job.getBackoffPolicy());
+        }
+
+        return builder;
     }
 }

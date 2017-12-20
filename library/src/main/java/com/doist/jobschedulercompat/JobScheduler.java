@@ -8,25 +8,39 @@ import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.scheduler.Scheduler;
 import com.doist.jobschedulercompat.scheduler.alarm.AlarmScheduler;
 import com.doist.jobschedulercompat.scheduler.gcm.GcmScheduler;
-import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerScheduler;
+import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV21;
+import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV24;
+import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV26;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build;
+import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RestrictTo;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** @see android.app.job.JobScheduler */
 public class JobScheduler {
-    public static final int RESULT_FAILURE = Scheduler.RESULT_SUCCESS;
-    public static final int RESULT_SUCCESS = Scheduler.RESULT_FAILURE;
+    /** @see android.app.job.JobScheduler#RESULT_SUCCESS */
+    public static final int RESULT_FAILURE = 0;
+    /** @see android.app.job.JobScheduler#RESULT_FAILURE */
+    public static final int RESULT_SUCCESS = 1;
+
+    static final int MAX_JOBS = 100;
+
+    Map<String, Scheduler> schedulers = new HashMap<>();
 
     @SuppressLint("StaticFieldLeak")
     private static JobScheduler instance;
+
     public static synchronized JobScheduler get(Context context) {
         if (instance == null) {
             instance = new JobScheduler(context);
@@ -36,27 +50,48 @@ public class JobScheduler {
 
     private Context context;
     private JobStore jobStore;
-    private Scheduler scheduler;
 
     private JobScheduler(Context context) {
         this.context = context.getApplicationContext();
         this.jobStore = JobStore.get(context);
-        this.scheduler = getBestScheduler(context, jobStore);
     }
 
     /** @see android.app.job.JobScheduler#schedule(android.app.job.JobInfo) */
     public int schedule(JobInfo job) {
-        return scheduler.schedule(job);
+        Scheduler scheduler = getSchedulerForJob(context, job);
+        synchronized (JobStore.LOCK) {
+            if (jobStore.size() > MAX_JOBS) {
+                throw new IllegalStateException("Apps may not schedule more than " + MAX_JOBS + " distinct jobs");
+            }
+            jobStore.add(JobStatus.createFromJobInfo(job, scheduler.getTag()));
+            return scheduler.schedule(job);
+        }
     }
 
     /** @see android.app.job.JobScheduler#cancel(int) */
     public void cancel(int jobId) {
-        scheduler.cancel(jobId);
+        synchronized (JobStore.LOCK) {
+            JobStatus jobStatus = jobStore.getJob(jobId);
+            if (jobStatus != null) {
+                Scheduler scheduler = getSchedulerForTag(context, jobStatus.getSchedulerTag());
+                jobStore.remove(jobId);
+                scheduler.cancel(jobId);
+            }
+        }
     }
 
     /** @see android.app.job.JobScheduler#cancelAll() */
     public void cancelAll() {
-        scheduler.cancelAll();
+        synchronized (JobStore.LOCK) {
+            Set<String> tags = new HashSet<>();
+            for (JobStatus jobStatus : jobStore.getJobs()) {
+                tags.add(jobStatus.getSchedulerTag());
+            }
+            jobStore.clear();
+            for (String tag : tags) {
+                getSchedulerForTag(context, tag).cancelAll();
+            }
+        }
     }
 
     /** @see android.app.job.JobScheduler#getAllPendingJobs() */
@@ -88,14 +123,64 @@ public class JobScheduler {
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     public void onJobCompleted(int jobId, boolean needsReschedule) {
-        JobStatus jobStatus = jobStore.getJob(jobId);
-        if (jobStatus != null && !jobStatus.getScheduler().equals(scheduler.getTag())) {
-            getSchedulerForTag(jobStatus.getScheduler(), context, jobStore).cancel(jobId);
-            schedule(jobStatus.getJob());
-            return;
+        synchronized (JobStore.LOCK) {
+            JobStatus jobStatus = jobStore.getJob(jobId);
+            if (jobStatus != null) {
+                jobStore.remove(jobId);
+                if (needsReschedule) {
+                    jobStore.add(getRescheduleJobForFailure(jobStatus));
+                } else if (jobStatus.isPeriodic()) {
+                    jobStore.add(getRescheduleJobForPeriodic(jobStatus));
+                }
+                getSchedulerForTag(context, jobStatus.getSchedulerTag()).onJobCompleted(jobId, needsReschedule);
+            }
         }
+    }
 
-        scheduler.onJobCompleted(jobId, needsReschedule, scheduler.getTag());
+    /** Similar to com.android.server.job.JobSchedulerService#getRescheduleJobForFailureLocked(JobStatus). */
+    private JobStatus getRescheduleJobForFailure(JobStatus failureToReschedule) {
+        final long elapsedNowMillis = SystemClock.elapsedRealtime();
+        final JobInfo job = failureToReschedule.getJob();
+        final long initialBackoffMillis = job.getInitialBackoffMillis();
+        final int backoffAttempts = failureToReschedule.getNumFailures() + 1;
+        long delayMillis;
+        switch (job.getBackoffPolicy()) {
+            case JobInfo.BACKOFF_POLICY_LINEAR:
+                delayMillis = initialBackoffMillis * backoffAttempts;
+                break;
+
+            case JobInfo.BACKOFF_POLICY_EXPONENTIAL:
+            default:
+                delayMillis = (long) Math.scalb(initialBackoffMillis, backoffAttempts - 1);
+                break;
+        }
+        delayMillis = Math.min(delayMillis, JobInfo.MAX_BACKOFF_DELAY_MILLIS);
+
+        JobStatus newJob = new JobStatus(
+                failureToReschedule.getJob(), failureToReschedule.getSchedulerTag(), backoffAttempts,
+                elapsedNowMillis + delayMillis, JobStatus.NO_LATEST_RUNTIME);
+
+        getSchedulerForTag(context, newJob.getSchedulerTag()).onJobRescheduled(newJob, failureToReschedule);
+
+        return newJob;
+    }
+
+    /** Similar to com.android.server.job.JobSchedulerService#getRescheduleJobForPeriodic(JobStatus). */
+    private JobStatus getRescheduleJobForPeriodic(JobStatus periodicToReschedule) {
+        final long elapsedNowMillis = SystemClock.elapsedRealtime();
+        // Compute how much of the period is remaining.
+        long runEarly = 0L;
+        // If this periodic was rescheduled it won't have a deadline.
+        if (periodicToReschedule.hasDeadlineConstraint()) {
+            runEarly = Math.max(periodicToReschedule.getLatestRunTimeElapsed() - elapsedNowMillis, 0L);
+        }
+        final long newEarliestRunTimeElapsed = elapsedNowMillis + runEarly;
+        final long period = periodicToReschedule.getJob().getIntervalMillis();
+        final long newLatestRuntimeElapsed = newEarliestRunTimeElapsed + period;
+
+        return new JobStatus(
+                periodicToReschedule.getJob(), periodicToReschedule.getSchedulerTag(), 0 /* backoffAttempt */,
+                newEarliestRunTimeElapsed, newLatestRuntimeElapsed);
     }
 
     @RestrictTo(RestrictTo.Scope.LIBRARY)
@@ -113,6 +198,13 @@ public class JobScheduler {
     }
 
     @RestrictTo(RestrictTo.Scope.LIBRARY)
+    public void addJob(JobStatus jobStatus) {
+        synchronized (JobStore.LOCK) {
+            jobStore.add(jobStatus);
+        }
+    }
+
+    @RestrictTo(RestrictTo.Scope.LIBRARY)
     public void removeJob(int jobId) {
         synchronized (JobStore.LOCK) {
             jobStore.remove(jobId);
@@ -120,41 +212,72 @@ public class JobScheduler {
     }
 
     @RestrictTo(RestrictTo.Scope.LIBRARY)
-    Scheduler getBestScheduler(Context context, JobStore jobs) {
-        if (isPlatformSchedulerAvailable()) {
-            return new JobSchedulerScheduler(context, jobs);
-        } else if (isGcmSchedulerAvailable(context)) {
-            return new GcmScheduler(context, jobs);
-        } else {
-            return new AlarmScheduler(context, jobs);
+    Scheduler getSchedulerForJob(Context context, JobInfo job) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return getSchedulerForTag(context, JobSchedulerSchedulerV26.TAG);
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_METERED
+                && !job.isRequireBatteryNotLow()
+                && !job.isRequireStorageNotLow()) {
+            return getSchedulerForTag(context, JobSchedulerSchedulerV24.TAG);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                && (!job.isPeriodic() || job.getFlexMillis() >= job.getIntervalMillis())
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_NOT_ROAMING
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_METERED
+                && job.getTriggerContentUris() == null
+                && !job.isRequireBatteryNotLow()
+                && !job.isRequireStorageNotLow()) {
+            return getSchedulerForTag(context, JobSchedulerSchedulerV21.TAG);
+        }
+
+        boolean gcmAvailable;
+        try {
+            gcmAvailable = Class.forName("com.google.android.gms.gcm.GcmNetworkManager") != null
+                    && GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
+                    == ConnectionResult.SUCCESS;
+        } catch (Throwable ignored) {
+            gcmAvailable = false;
+        }
+        if (gcmAvailable
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_NOT_ROAMING
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_METERED
+                && !job.isRequireBatteryNotLow()
+                && !job.isRequireStorageNotLow()) {
+            return getSchedulerForTag(context, GcmScheduler.TAG);
+        }
+
+        return getSchedulerForTag(context, AlarmScheduler.TAG);
     }
 
     @RestrictTo(RestrictTo.Scope.LIBRARY)
-    Scheduler getSchedulerForTag(String tag, Context context, JobStore jobStore) {
-        switch (tag) {
-            case JobSchedulerScheduler.TAG:
-                return new JobSchedulerScheduler(context, jobStore);
-            case GcmScheduler.TAG:
-                return new GcmScheduler(context, jobStore);
-            case AlarmScheduler.TAG:
-                return new AlarmScheduler(context, jobStore);
-            default:
-                throw new IllegalArgumentException("Missing scheduler for tag " + tag);
+    Scheduler getSchedulerForTag(Context context, String tag) {
+        Scheduler scheduler = schedulers.get(tag);
+        if (scheduler == null) {
+            switch (tag) {
+                case JobSchedulerSchedulerV26.TAG:
+                    scheduler = new JobSchedulerSchedulerV26(context);
+                    break;
+                case JobSchedulerSchedulerV24.TAG:
+                    scheduler = new JobSchedulerSchedulerV24(context);
+                    break;
+                case JobSchedulerSchedulerV21.TAG:
+                    scheduler = new JobSchedulerSchedulerV21(context);
+                    break;
+                case GcmScheduler.TAG:
+                    scheduler = new GcmScheduler(context);
+                    break;
+                case AlarmScheduler.TAG:
+                    scheduler = new AlarmScheduler(context);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Missing scheduler for tag " + tag);
+            }
+            schedulers.put(tag, scheduler);
         }
-    }
-
-    private boolean isPlatformSchedulerAvailable() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP;
-    }
-
-    private boolean isGcmSchedulerAvailable(Context context) {
-        try {
-            return Class.forName("com.google.android.gms.gcm.GcmNetworkManager") != null
-                    && GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
-                    == ConnectionResult.SUCCESS;
-        } catch (Throwable t) {
-            return false;
-        }
+        return scheduler;
     }
 }

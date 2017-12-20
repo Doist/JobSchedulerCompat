@@ -6,6 +6,7 @@ import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.util.DeviceTestUtils;
 import com.doist.jobschedulercompat.util.JobCreator;
+import com.doist.jobschedulercompat.util.ShadowContextImpl;
 import com.doist.jobschedulercompat.util.ShadowNetworkInfo;
 
 import org.junit.Before;
@@ -14,9 +15,9 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.android.controller.ServiceController;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowApplication;
-import org.robolectric.util.ServiceController;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -32,7 +33,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowNetworkInfo.class})
+@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
+        shadows = {ShadowContextImpl.class, ShadowNetworkInfo.class})
 public class AlarmReceiverTest {
     private Context context;
     private PackageManager packageManager;
@@ -90,6 +92,25 @@ public class AlarmReceiverTest {
     }
 
     @Test
+    public void testStorageReceiverLifecycle() {
+        ComponentName receiver = new ComponentName(context, AlarmReceiver.StorageReceiver.class);
+
+        assertFalse(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
+
+        DeviceTestUtils.setStorageNotLow(context, false);
+        jobStore.add(JobStatus.createFromJobInfo(
+                JobCreator.create(context, 0).setRequiresStorageNotLow(true).build(), AlarmScheduler.TAG));
+        service.startCommand(0, 0);
+
+        assertTrue(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
+
+        DeviceTestUtils.setStorageNotLow(context, true);
+        service.startCommand(0, 0);
+
+        assertFalse(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
+    }
+
+    @Test
     public void testConnectivityReceiverLifecycle() {
         ComponentName receiver = new ComponentName(context, AlarmReceiver.ConnectivityReceiver.class);
 
@@ -117,6 +138,11 @@ public class AlarmReceiverTest {
                      AlarmJobService.class.getName());
 
         new AlarmReceiver.BatteryReceiver().onReceive(context, new Intent(Intent.ACTION_POWER_CONNECTED));
+
+        assertEquals(ShadowApplication.getInstance().getNextStartedService().getComponent().getClassName(),
+                     AlarmJobService.class.getName());
+
+        new AlarmReceiver.StorageReceiver().onReceive(context, new Intent(Intent.ACTION_DEVICE_STORAGE_LOW));
 
         assertEquals(ShadowApplication.getInstance().getNextStartedService().getComponent().getClassName(),
                      AlarmJobService.class.getName());

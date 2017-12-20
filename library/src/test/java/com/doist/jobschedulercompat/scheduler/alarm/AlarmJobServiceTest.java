@@ -17,11 +17,12 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.android.controller.ServiceController;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowApplication;
-import org.robolectric.util.ServiceController;
 
 import android.content.Context;
+import android.net.Uri;
 import android.os.Build;
 
 import java.util.concurrent.TimeUnit;
@@ -29,10 +30,10 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowNetworkInfo.class})
+@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
+        shadows = {ShadowNetworkInfo.class})
 public class AlarmJobServiceTest {
-    private static final long THREAD_WAIT_MS = 100;
-    private static long DELAY_MS = 2000;
+    private static long DELAY_MS = 5000;
     private static long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
 
     private Context context;
@@ -48,7 +49,7 @@ public class AlarmJobServiceTest {
 
     @After
     public void teardown() {
-        NoopAsyncJobService.stopAll();
+        JobCreator.interruptJobs();
         jobStore.clear();
     }
 
@@ -72,7 +73,7 @@ public class AlarmJobServiceTest {
 
         assertBoundServiceCount(1);
 
-        Thread.sleep(THREAD_WAIT_MS + delayMs);
+        JobCreator.waitForJob(0);
 
         assertBoundServiceCount(0);
     }
@@ -157,6 +158,20 @@ public class AlarmJobServiceTest {
         service.startCommand(0, 0);
 
         assertBoundServiceCount(1);
+    }
+
+    @Test
+    public void testContentTriggerConstraint() {
+        jobStore.add(JobStatus.createFromJobInfo(
+                JobCreator.create(context, 0, DELAY_MS)
+                          .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("com.doist"), 0))
+                          .build(),
+                AlarmScheduler.TAG));
+
+        service.startCommand(0, 0);
+
+        assertEquals(AlarmContentObserverService.class.getCanonicalName(),
+                     ShadowApplication.getInstance().getNextStartedService().getComponent().getClassName());
     }
 
     @Test

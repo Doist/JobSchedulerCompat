@@ -2,12 +2,9 @@
 JobSchedulerCompat
 ==================
 
-JobSchedulerCompat is a backport of [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) for API 16 and above. Depending on the context, it will use:
+JobSchedulerCompat is a backport of [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) for API 16 and above.
 
-* [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) (API 21 and above)
-* [GcmNetworkManager](https://developers.google.com/android/reference/com/google/android/gms/gcm/GcmNetworkManager) (API 20 and below, if Google Play Services is available)
-* [AlarmManager](https://developer.android.com/reference/android/app/AlarmManager.html) (API 20 and below, if Google Play Services is unavailable)
-
+Behind the scenes, it relies on [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html), [GcmNetworkManager](https://developers.google.com/android/reference/com/google/android/gms/gcm/GcmNetworkManager) and [AlarmManager](https://developer.android.com/reference/android/app/AlarmManager.html).
 
 
 
@@ -65,12 +62,23 @@ All necessary components have compatibility variants and follow their counterpar
 
 | Component           | Modeled after                            | Limitations                              |
 | ------------------- | ---------------------------------------- | ---------------------------------------- |
-| `JobScheduler`      | [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html) | None.                                    |
-| `JobInfo`           | [`JobInfo`](https://developer.android.com/reference/android/app/job/JobInfo.html) | [`JobInfo.TriggerContentUri`](https://developer.android.com/reference/android/app/job/JobInfo.TriggerContentUri.html) and related APIs:<ul><li>Unavailable in API 21's [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html);</li><li>Unavailable in [`GcmNetworkManager`](https://developers.google.com/android/reference/com/google/android/gms/gcm/GcmNetworkManager).</li></ul><br>[`JobInfo#getFlexMillis()`](https://developer.android.com/reference/android/app/job/JobInfo.html#getFlexMillis()) and related APIs:<ul><li>Unavailable in API 21's [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html).</li></ul> |
+| `JobScheduler`      | [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html) | [`JobScheduler#enqueue(JobInfo, JobWorkItem)`](https://developer.android.com/reference/android/app/job/JobScheduler.html#enqueue(android.app.job.JobInfo, android.app.job.JobWorkItem)) and related APIs. |
+| `JobInfo`           | [`JobInfo`](https://developer.android.com/reference/android/app/job/JobInfo.html) | [`JobInfo#setClipData(ClipData, int)`](https://developer.android.com/reference/android/app/job/JobInfo.Builder.html#setClipData(android.content.ClipData, int)) and related APIs. |
 | `JobService`        | [`JobService`](https://developer.android.com/reference/android/app/job/JobService.html) | None.                                    |
-| `JobParameters`     | [`JobParameters`](https://developer.android.com/reference/android/app/job/JobParameters.html) | [`JobParameters#getTriggeredContentUris()`](https://developer.android.com/reference/android/app/job/JobParameters.html#getTriggeredContentUris()) and related APIs:<ul><li>Unavailable in API 21's [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html);</li><li>Unavailable in [`GcmNetworkManager`](https://developers.google.com/android/reference/com/google/android/gms/gcm/GcmNetworkManager).</li></ul> |
+| `JobParameters`     | [`JobParameters`](https://developer.android.com/reference/android/app/job/JobParameters.html) | [`JobParameters#getClipData()`](https://developer.android.com/reference/android/app/job/JobParameters.html#getClipData()) and related APIs. |
 | `PersistableBundle` | [`PersistableBundle`](https://developer.android.com/reference/android/os/PersistableBundle.html) | None.                                    |
 
+
+
+## Schedulers
+
+For each job, the best possible scheduler is used:
+
+- [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) (API 21 and above)
+- [GcmNetworkManager](https://developers.google.com/android/reference/com/google/android/gms/gcm/GcmNetworkManager) (API 20 and below, if Google Play Services is available)
+- [AlarmManager](https://developer.android.com/reference/android/app/AlarmManager.html) (API 20 and below, if Google Play Services is unavailable)
+
+Whenever a job relies on unsupported APIs, JobSchedulerCompat falls back to the next best scheduler. For example, if your job relies on [`JobInfo.TriggerContentUri`](https://developer.android.com/reference/android/app/job/JobInfo.TriggerContentUri.html) while running on API 21 (where this workflow didn't exist), [GcmNetworkManager](https://developers.google.com/android/reference/com/google/android/gms/gcm/GcmNetworkManager) will be used instead of [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html) for that particular job.
 
 
 
@@ -81,11 +89,11 @@ We wanted a library that offered the core functionality of [`JobScheduler`](http
 
 We looked at the status quo:
 
-| Library                                  | Minimum SDK | Requires Google Play Services | Uses best job scheduling engine for context | Same API as JobScheduler |
-| ---------------------------------------- | ----------- | ----------------------------- | ---------------------------------------- | ------------------------ |
-| Framework's [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) | 21          | No.                           | Yes.                                     | Yes.                     |
-| [Firebase JobDispatcher](https://github.com/firebase/firebase-jobdispatcher-android) | 9           | Yes.                          | No.                                      | Similar.                 |
-| Evernote's [Android-Job](https://github.com/evernote/android-job) | 14          | No.                           | Yes.                                     | No.                      |
+| Library                                  | Minimum SDK  | Requires Google Play Services | Uses best job scheduling engine for context | Same API as JobScheduler |
+| ---------------------------------------- | ------------ | ----------------------------- | ---------------------------------------- | ------------------------ |
+| Framework's [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) | 21, 24 or 26 | No.                           | Yes.                                     | Yes.                     |
+| [Firebase JobDispatcher](https://github.com/firebase/firebase-jobdispatcher-android) | 9            | Yes.                          | No.                                      | No.                      |
+| Evernote's [Android-Job](https://github.com/evernote/android-job) | 14           | No.                           | Yes.                                     | No.                      |
 
 
 
@@ -98,7 +106,6 @@ License
 -------
 
 ```
-Copyright 2016 Google, Inc.
 Copyright 2017 Doist
 
 Licensed under the Apache License, Version 2.0 (the "License");

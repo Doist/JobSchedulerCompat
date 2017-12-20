@@ -21,6 +21,8 @@
 
         <service android:name=".scheduler.alarm.AlarmJobService" />
 
+        <service android:name=".scheduler.alarm.AlarmContentObserverService" />
+
         <receiver
             android:name=".scheduler.alarm.AlarmReceiver"
             android:enabled="false">
@@ -40,6 +42,17 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".scheduler.alarm.AlarmReceiver$StorageReceiver"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_DEVICE_STORAGE_LOW" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_DEVICE_STORAGE_OK" />
             </intent-filter>
         </receiver>
 

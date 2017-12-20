@@ -1,5 +1,6 @@
 package com.doist.jobschedulercompat.scheduler.alarm;
 
+import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.JobParameters;
 import com.doist.jobschedulercompat.JobScheduler;
 import com.doist.jobschedulercompat.JobService;
@@ -14,6 +15,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -24,6 +26,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -133,7 +136,19 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         // Enable charging receiver if there are unmet constraints, or disable it if there aren't.
         setComponentEnabled(this, AlarmReceiver.BatteryReceiver.class, unsatisfiedChargingConstraint);
 
+        // Update battery not low constraint.
+        // ACTION_BATTERY_CHANGED cannot be received through a receiver declared in AndroidManifest.
+        // AlarmReceiver will be scheduled to run by AlarmManager at most 30 minutes from now.
+        boolean unsatisfiedBatteryNotLowConstraint = false;
+        boolean batteryNotLow = DeviceUtils.isBatteryNotLow(this);
+        for (JobStatus jobStatus : jobStatuses) {
+            jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_BATTERY_NOT_LOW, batteryNotLow);
+            unsatisfiedBatteryNotLowConstraint |= jobStatus.hasBatteryNotLowConstraint() && !batteryNotLow;
+        }
+
         // Update idle constraint.
+        // ACTION_SCREEN_OFF cannot be received through a receiver declared in AndroidManifest.
+        // AlarmReceiver will be scheduled to run by AlarmManager at most 15 minutes from now.
         boolean unsatisfiedIdleConstraint = false;
         boolean idle = DeviceUtils.isIdle(this);
         for (JobStatus jobStatus : jobStatuses) {
@@ -141,25 +156,50 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
             unsatisfiedIdleConstraint |= jobStatus.hasIdleConstraint() && !idle;
         }
 
-        // ACTION_SCREEN_OFF cannot be received through a receiver declared in AndroidManifest.
-        // AlarmReceiver will be scheduled to run by AlarmManager at most 30 minutes from now.
+        // Update storage not low constraint.
+        boolean unsatisfiedStorageNowLowConstraint = false;
+        boolean storageNotLow = DeviceUtils.isStorageNotLow(this);
+        for (JobStatus jobStatus : jobStatuses) {
+            jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_STORAGE_NOT_LOW, storageNotLow);
+            unsatisfiedStorageNowLowConstraint |= jobStatus.hasStorageNotLowConstraint() && !storageNotLow;
+        }
+
+        // Enable storage receiver if there are unmet constraints, or disable it if there aren't.
+        setComponentEnabled(this, AlarmReceiver.StorageReceiver.class, unsatisfiedStorageNowLowConstraint);
 
         // Get connectivity constraints.
         boolean unsatisfiedConnectivityConstraint = false;
         boolean connected = DeviceUtils.isConnected(this);
         boolean unmetered = connected && DeviceUtils.isUnmetered(this);
         boolean notRoaming = connected && DeviceUtils.isNotRoaming(this);
+        boolean metered = connected && DeviceUtils.isMetered(this);
         for (JobStatus jobStatus : jobStatuses) {
             jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_CONNECTIVITY, connected);
-            unsatisfiedConnectivityConstraint |= jobStatus.hasConnectivityConstraint() && !connected;
+            unsatisfiedConnectivityConstraint |= jobStatus.needsAnyConnectivity() && !connected;
             jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_UNMETERED, unmetered);
-            unsatisfiedConnectivityConstraint |= jobStatus.hasUnmeteredConstraint() && !unmetered;
+            unsatisfiedConnectivityConstraint |= jobStatus.needsUnmeteredConnectivity() && !unmetered;
             jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_NOT_ROAMING, notRoaming);
-            unsatisfiedConnectivityConstraint |= jobStatus.hasNotRoamingConstraint() && !notRoaming;
+            unsatisfiedConnectivityConstraint |= jobStatus.needsNonRoamingConnectivity() && !notRoaming;
+            jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_METERED, notRoaming);
+            unsatisfiedConnectivityConstraint |= jobStatus.needsMeteredConnectivity() && !metered;
         }
 
         // Enable connectivity receiver if there are unmet constraints, or disable it if there aren't.
         setComponentEnabled(this, AlarmReceiver.ConnectivityReceiver.class, unsatisfiedConnectivityConstraint);
+
+        // Get content constraints.
+        boolean unsatisfiedContentTriggerConstraint = false;
+        for (JobStatus jobStatus : jobStatuses) {
+            Set<Uri> changedUris = jobStatus.changedUris;
+            boolean hasChangedUris = changedUris != null && !changedUris.isEmpty();
+            jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_CONTENT_TRIGGER, hasChangedUris);
+            unsatisfiedContentTriggerConstraint |= jobStatus.hasContentTriggerConstraint() && !hasChangedUris;
+        }
+
+        // Start content observers if there are unmet content trigger constraints.
+        if (unsatisfiedContentTriggerConstraint) {
+            startService(new Intent(this, AlarmContentObserverService.class));
+        }
 
         // Get timing constraints.
         long nextExpiryTime = Long.MAX_VALUE;
@@ -186,18 +226,21 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         }
 
         // Schedule alarm to run at the earliest deadline, if any.
-        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, new Intent(this, AlarmReceiver.class), 0);
+        // In case of an unmet idle constraint, this deadline needs to be exact to attempt to wake the device up.
         long triggerAtMillis = Math.min(nextExpiryTime, nextDelayTime);
         if (unsatisfiedIdleConstraint) {
+            triggerAtMillis = Math.min(triggerAtMillis, TimeUnit.MINUTES.toMillis(15));
+        } else if (unsatisfiedBatteryNotLowConstraint) {
             triggerAtMillis = Math.min(triggerAtMillis, TimeUnit.MINUTES.toMillis(30));
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        }
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, new Intent(this, AlarmReceiver.class), 0);
+        if (triggerAtMillis != Long.MAX_VALUE) {
+            if (unsatisfiedIdleConstraint && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                 alarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pendingIntent);
             } else {
                 alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pendingIntent);
             }
-        } else if (triggerAtMillis != Long.MAX_VALUE) {
-            alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pendingIntent);
         } else {
             alarmManager.cancel(pendingIntent);
         }
@@ -217,10 +260,16 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
     private void startJob(JobStatus jobStatus, int startId) {
         wakeLockJob.acquire(TIMEOUT_WAKE_LOCK_JOB);
         int jobId = jobStatus.getJobId();
-        JobParameters params = new JobParameters(jobId, jobStatus.getExtras(), jobStatus.isDeadlineSatisfied());
+        JobInfo job = jobStatus.getJob();
+        JobParameters params = new JobParameters(
+                jobId, job.getExtras(), job.getTransientExtras(), jobStatus.isDeadlineSatisfied(),
+                jobStatus.changedUris != null ?
+                jobStatus.changedUris.toArray(new Uri[jobStatus.changedUris.size()]) : null,
+                jobStatus.changedAuthorities != null ?
+                jobStatus.changedAuthorities.toArray(new String[jobStatus.changedAuthorities.size()]) : null);
         Connection connection = new Connection(jobId, startId, params);
         Intent jobIntent = new Intent();
-        ComponentName service = jobStatus.getService();
+        ComponentName service = jobStatus.getServiceComponent();
         jobIntent.setComponent(service);
         if (bindService(jobIntent, connection, BIND_AUTO_CREATE)) {
             connections.put(jobId, connection);
@@ -289,6 +338,7 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
             binder = (JobService.Binder) service;
             if (!binder.startJob(params, AlarmJobService.this)) {
                 stopJob(this, false);
+                return;
             }
         }
 

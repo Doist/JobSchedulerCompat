@@ -22,6 +22,13 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
     }
 
+    public static class StorageReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            AlarmJobService.start(context);
+        }
+    }
+
     public static class ConnectivityReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {

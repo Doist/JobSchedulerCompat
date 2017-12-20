@@ -3,6 +3,7 @@ package com.doist.jobschedulercompat.job;
 import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
+import com.doist.jobschedulercompat.util.BundleUtils;
 import com.doist.jobschedulercompat.util.JobCreator;
 
 import org.junit.After;
@@ -14,10 +15,15 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 import android.content.Context;
+import android.net.Uri;
+import android.os.Bundle;
 import android.os.SystemClock;
 
 import java.util.Iterator;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import edu.emory.mathcs.backport.java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -25,8 +31,6 @@ import static org.junit.Assert.assertTrue;
 @RunWith(RobolectricTestRunner.class)
 @Config(constants = BuildConfig.class)
 public class JobStoreTest {
-    private static final long IO_WAIT_MS = 500;
-
     private Context context;
     private JobStore jobStore;
 
@@ -44,23 +48,23 @@ public class JobStoreTest {
     @Test
     public void testMaybeWriteStatusToDisk() throws InterruptedException {
         JobInfo job = JobCreator.create(context, 0)
-                .setRequiresCharging(true)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setBackoffCriteria(10000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
-                .setOverrideDeadline(20000L)
-                .setMinimumLatency(2000L)
-                .setPersisted(true)
-                .build();
+                                .setRequiresCharging(true)
+                                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                                .setBackoffCriteria(10000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
+                                .setOverrideDeadline(20000L)
+                                .setMinimumLatency(2000L)
+                                .setPersisted(true)
+                                .build();
         JobStatus jobStatus = JobStatus.createFromJobInfo(job, "noop");
         jobStore.add(jobStatus);
 
-        Thread.sleep(IO_WAIT_MS);
+        waitForJobStoreWrite();
 
         // Manually load tasks from xml file.
         JobStore.JobSet jobStatusSet = new JobStore.JobSet();
         jobStore.readJobMapFromDisk(jobStatusSet);
 
-        assertEquals("Didn't get expected number of persisted tasks", 1, jobStatusSet.size());
+        assertEquals("Incorrect # of persisted tasks", 1, jobStatusSet.size());
         JobStatus loaded = jobStatusSet.getJobs().get(0);
         assertJobInfoEquals(job, loaded.getJob());
         assertTrue("JobStore#containsJob invalid", jobStore.containsJob(jobStatus));
@@ -77,24 +81,24 @@ public class JobStoreTest {
     @Test
     public void testWritingTwoFilesToDisk() throws Exception {
         JobInfo job1 = JobCreator.create(context, 1)
-                .setRequiresDeviceIdle(true)
-                .setPeriodic(10000L)
-                .setRequiresCharging(true)
-                .setPersisted(true)
-                .build();
+                                 .setRequiresDeviceIdle(true)
+                                 .setPeriodic(10000L)
+                                 .setRequiresCharging(true)
+                                 .setPersisted(true)
+                                 .build();
         JobInfo job2 = JobCreator.create(context, 2)
-                .setMinimumLatency(5000L)
-                .setBackoffCriteria(15000L, JobInfo.BACKOFF_POLICY_LINEAR)
-                .setOverrideDeadline(30000L)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
-                .setPersisted(true)
-                .build();
+                                 .setMinimumLatency(5000L)
+                                 .setBackoffCriteria(15000L, JobInfo.BACKOFF_POLICY_LINEAR)
+                                 .setOverrideDeadline(30000L)
+                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                                 .setPersisted(true)
+                                 .build();
         JobStatus jobStatus1 = JobStatus.createFromJobInfo(job1, "noop");
         JobStatus jobStatus2 = JobStatus.createFromJobInfo(job2, "noop");
         jobStore.add(jobStatus1);
         jobStore.add(jobStatus2);
 
-        Thread.sleep(IO_WAIT_MS);
+        waitForJobStoreWrite();
 
         JobStore.JobSet jobStatusSet = new JobStore.JobSet();
         jobStore.readJobMapFromDisk(jobStatusSet);
@@ -131,16 +135,16 @@ public class JobStoreTest {
                 "Late run-times not the same after read.",
                 jobStatus2.getLatestRunTimeElapsed(),
                 loaded2.getLatestRunTimeElapsed());
-
     }
 
     @Test
     public void testWritingTaskWithExtras() throws Exception {
-        JobInfo.Builder builder = JobCreator.create(context, 8)
-                .setRequiresDeviceIdle(true)
-                .setPeriodic(10000L)
-                .setRequiresCharging(true)
-                .setPersisted(true);
+        JobInfo.Builder builder =
+                JobCreator.create(context, 8)
+                          .setRequiresDeviceIdle(true)
+                          .setPeriodic(10000L)
+                          .setRequiresCharging(true)
+                          .setPersisted(true);
 
         PersistableBundle extras = new PersistableBundle();
         extras.putDouble("hello", 3.2);
@@ -151,13 +155,32 @@ public class JobStoreTest {
         JobStatus jobStatus = JobStatus.createFromJobInfo(job, "noop");
         jobStore.add(jobStatus);
 
-        Thread.sleep(IO_WAIT_MS);
+        waitForJobStoreWrite();
 
         JobStore.JobSet jobStatusSet = new JobStore.JobSet();
         jobStore.readJobMapFromDisk(jobStatusSet);
         assertEquals("Incorrect # of persisted tasks.", 1, jobStatusSet.size());
         JobStatus loaded = jobStatusSet.getJobs().iterator().next();
         assertJobInfoEquals(job, loaded.getJob());
+    }
+
+    public void testWritingTaskWithFlex() throws Exception {
+        JobInfo.Builder builder =
+                JobCreator.create(context, 8)
+                          .setRequiresDeviceIdle(true)
+                          .setPeriodic(TimeUnit.HOURS.toMillis(5), TimeUnit.HOURS.toMillis(1))
+                          .setRequiresCharging(true)
+                          .setPersisted(true);
+        JobStatus taskStatus = JobStatus.createFromJobInfo(builder.build(), "noop");
+
+        waitForJobStoreWrite();
+
+        JobStore.JobSet jobStatusSet = new JobStore.JobSet();
+        jobStore.readJobMapFromDisk(jobStatusSet);
+        assertEquals("Incorrect # of persisted tasks.", 1, jobStatusSet.size());
+        JobStatus loaded = jobStatusSet.getJobs().iterator().next();
+        assertEquals("Period not equal", loaded.getJob().getIntervalMillis(), taskStatus.getJob().getIntervalMillis());
+        assertEquals("Flex not equal", loaded.getJob().getFlexMillis(), taskStatus.getJob().getFlexMillis());
     }
 
     @Test
@@ -171,7 +194,7 @@ public class JobStoreTest {
                 new JobStatus(job, "noop", invalidEarlyRuntimeElapsedMillis, invalidLateRuntimeElapsedMillis);
         jobStore.add(jobStatus);
 
-        Thread.sleep(IO_WAIT_MS);
+        waitForJobStoreWrite();
 
         JobStore.JobSet jobStatusSet = new JobStore.JobSet();
         jobStore.readJobMapFromDisk(jobStatusSet);
@@ -189,20 +212,74 @@ public class JobStoreTest {
     }
 
     @Test
-    public void testSchedulerPersisted() throws Exception {
+    public void testSchedulerPersisted() {
         JobInfo job = JobCreator.create(context, 92)
-                .setOverrideDeadline(5000)
-                .setPersisted(true)
-                .build();
+                                .setOverrideDeadline(5000)
+                                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
+                                .setRequiresBatteryNotLow(true)
+                                .setPersisted(true)
+                                .build();
         JobStatus jobStatus = JobStatus.createFromJobInfo(job, "noop");
         jobStore.add(jobStatus);
 
-        Thread.sleep(IO_WAIT_MS);
+        waitForJobStoreWrite();
 
-        final JobStore.JobSet jobStatusSet = new JobStore.JobSet();
+        JobStore.JobSet jobStatusSet = new JobStore.JobSet();
         jobStore.readJobMapFromDisk(jobStatusSet);
+        Iterator<JobStatus> it = jobStatusSet.getJobs().iterator();
+        assertTrue(it.hasNext());
+        assertEquals("Scheduler not correctly persisted.", "noop", it.next().getSchedulerTag());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCompat() {
+        Uri uri = Uri.parse("doist.com");
+        String authority = "com.doist";
+
+        JobInfo.Builder builder =
+                JobCreator.create(context, 103)
+                          .addTriggerContentUri(new JobInfo.TriggerContentUri(uri, 0))
+                          .setTriggerContentUpdateDelay(TimeUnit.SECONDS.toMillis(5))
+                          .setTriggerContentMaxDelay(TimeUnit.SECONDS.toMillis(30));
+
+        Bundle transientExtras = new Bundle();
+        transientExtras.putBoolean("test", true);
+        builder.setTransientExtras(transientExtras);
+
+        JobInfo job = builder.build();
+        JobStatus jobStatus = JobStatus.createFromJobInfo(job, "noop");
+
+        jobStatus.changedUris = Collections.singleton(uri);
+        jobStatus.changedAuthorities = Collections.singleton(authority);
+
+        jobStore.add(jobStatus);
+
+        waitForJobStoreWrite();
+
+        JobStore.JobSet jobStatusSet = new JobStore.JobSet();
+        jobStore.readJobMapFromDisk(jobStatusSet);
+        assertEquals("Incorrect # of persisted tasks.", 1, jobStatusSet.size());
         JobStatus loaded = jobStatusSet.getJobs().iterator().next();
-        assertEquals("Priority not correctly persisted.", "noop", loaded.getScheduler());
+        assertEquals(jobStatus.changedUris, loaded.changedUris);
+        assertEquals(jobStatus.changedAuthorities, loaded.changedAuthorities);
+        assertJobInfoEquals(job, loaded.getJob());
+    }
+
+    private void waitForJobStoreWrite() {
+        try {
+            final Semaphore semaphore = new Semaphore(1);
+            semaphore.acquire();
+            jobStore.queue.offer(new Runnable() {
+                @Override
+                public void run() {
+                    semaphore.release();
+                }
+            }, 1, TimeUnit.SECONDS);
+            semaphore.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -213,20 +290,25 @@ public class JobStoreTest {
         assertEquals("Different components", first.getService(), second.getService());
         assertEquals("Different periodic status", first.isPeriodic(), second.isPeriodic());
         assertEquals("Different period", first.getIntervalMillis(), second.getIntervalMillis());
-        assertEquals("Different inital backoff", first.getInitialBackoffMillis(), second.getInitialBackoffMillis());
+        assertEquals("Different initial backoff", first.getInitialBackoffMillis(), second.getInitialBackoffMillis());
         assertEquals("Different backoff policy", first.getBackoffPolicy(), second.getBackoffPolicy());
         assertEquals("Invalid charging constraint", first.isRequireCharging(), second.isRequireCharging());
+        assertEquals("Invalid battery not low constraint",
+                     first.isRequireBatteryNotLow(), second.isRequireBatteryNotLow());
         assertEquals("Invalid idle constraint", first.isRequireDeviceIdle(), second.isRequireDeviceIdle());
-        assertEquals("Invalid unmetered constraint", first.getNetworkType(), second.getNetworkType());
+        assertEquals("Invalid connectivity constraint", first.getNetworkType(), second.getNetworkType());
         assertEquals("Invalid deadline constraint", first.hasLateConstraint(), second.hasLateConstraint());
         assertEquals("Invalid delay constraint", first.hasEarlyConstraint(), second.hasEarlyConstraint());
         assertEquals("Extras don't match", first.getExtras().toMap(10), second.getExtras().toMap(10));
+        assertEquals("Transient extras don't match",
+                     BundleUtils.toMap(first.getTransientExtras(), 10),
+                     BundleUtils.toMap(second.getTransientExtras(), 10));
     }
 
     /**
      * Comparing timestamps before and after IO read/writes involves some latency.
      */
     private void compareTimestampsSubjectToIoLatency(String error, long ts1, long ts2) {
-        assertTrue(error, Math.abs(ts1 - ts2) < IO_WAIT_MS * 2);
+        assertTrue(error, Math.abs(ts1 - ts2) < TimeUnit.SECONDS.toMillis(1000));
     }
 }

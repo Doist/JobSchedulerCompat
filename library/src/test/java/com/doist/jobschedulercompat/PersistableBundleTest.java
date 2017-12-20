@@ -30,7 +30,6 @@ public class PersistableBundleTest {
     }
 
     @Test
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public void testPersistableBundleConstructor() {
         android.os.PersistableBundle platformBundle = new android.os.PersistableBundle();
         platformBundle.putString("string", "string");
@@ -98,7 +97,6 @@ public class PersistableBundleTest {
     }
 
     @Test
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public void testPersistableBundleBooleans() {
         PersistableBundle bundle = new PersistableBundle();
         bundle.putBoolean("boolean", true);
@@ -135,7 +133,6 @@ public class PersistableBundleTest {
     }
 
     @Test
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public void testPersistableBundleConversion() {
         PersistableBundle bundle = getFilledBundle(10);
         PersistableBundle convertedBundle = new PersistableBundle(bundle.toPersistableBundle());

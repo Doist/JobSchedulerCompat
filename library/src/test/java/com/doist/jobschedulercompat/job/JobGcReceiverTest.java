@@ -12,6 +12,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.manifest.AndroidManifest;
 import org.robolectric.shadows.ShadowApplication;
 
 import android.content.BroadcastReceiver;
@@ -46,6 +47,7 @@ public class JobGcReceiverTest {
     @Test
     public void testBootReceiverRegistered() {
         Intent intent = new Intent(Intent.ACTION_BOOT_COMPLETED);
+        AndroidManifest manifest = ShadowApplication.getInstance().getAppManifest();
         List<BroadcastReceiver> receivers = ShadowApplication.getInstance().getReceiversForIntent(intent);
         assertThat(receivers, hasItem(isA(JobGcReceiver.class)));
     }

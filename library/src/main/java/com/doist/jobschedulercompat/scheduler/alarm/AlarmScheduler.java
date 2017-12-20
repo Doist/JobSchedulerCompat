@@ -1,7 +1,7 @@
 package com.doist.jobschedulercompat.scheduler.alarm;
 
 import com.doist.jobschedulercompat.JobInfo;
-import com.doist.jobschedulercompat.job.JobStore;
+import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.scheduler.Scheduler;
 
 import android.app.AlarmManager;
@@ -16,26 +16,23 @@ import android.support.annotation.RestrictTo;
 public class AlarmScheduler extends Scheduler {
     public static final String TAG = "AlarmScheduler";
 
-    public AlarmScheduler(Context context, JobStore jobs) {
-        super(context, jobs);
+    public AlarmScheduler(Context context) {
+        super(context);
     }
 
     @Override
     public int schedule(JobInfo job) {
-        int result = super.schedule(job);
         AlarmJobService.start(context);
-        return result;
+        return RESULT_SUCCESS;
     }
 
     @Override
     public void cancel(int jobId) {
-        super.cancel(jobId);
         AlarmJobService.start(context);
     }
 
     @Override
     public void cancelAll() {
-        super.cancelAll();
         AlarmJobService.start(context);
     }
 
@@ -46,8 +43,15 @@ public class AlarmScheduler extends Scheduler {
     }
 
     @Override
-    public void onJobCompleted(int jobId, boolean needsReschedule, String scheduler) {
-        super.onJobCompleted(jobId, needsReschedule, scheduler);
+    public void onJobCompleted(int jobId, boolean needsReschedule) {
         AlarmJobService.start(context);
+    }
+
+    @Override
+    public void onJobRescheduled(JobStatus newJob, JobStatus failedJob) {
+        if (failedJob.hasContentTriggerConstraint() && newJob.hasContentTriggerConstraint()) {
+            newJob.changedAuthorities = failedJob.changedAuthorities;
+            newJob.changedUris = failedJob.changedUris;
+        }
     }
 }

@@ -7,12 +7,11 @@ import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.job.JobStore;
-import com.doist.jobschedulercompat.scheduler.alarm.AlarmScheduler;
 import com.doist.jobschedulercompat.util.DeviceTestUtils;
 import com.doist.jobschedulercompat.util.JobCreator;
-import com.doist.jobschedulercompat.util.NoopAsyncJobService;
 import com.doist.jobschedulercompat.util.ShadowGoogleApiAvailability;
 import com.doist.jobschedulercompat.util.ShadowNetworkInfo;
+import com.doist.jobschedulercompat.util.ShadowParcel;
 
 import org.junit.After;
 import org.junit.Before;
@@ -29,6 +28,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcel;
@@ -40,10 +40,8 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
-        shadows = {ShadowGoogleApiAvailability.class, ShadowNetworkInfo.class})
+        shadows = {ShadowGoogleApiAvailability.class, ShadowNetworkInfo.class, ShadowParcel.class})
 public class GcmJobServiceTest {
-    private static final long THREAD_WAIT_MS = 100;
-
     private Context context;
     private JobStore jobStore;
     private GcmJobService service;
@@ -62,7 +60,7 @@ public class GcmJobServiceTest {
 
     @After
     public void teardown() {
-        NoopAsyncJobService.stopAll();
+        JobCreator.interruptJobs();
         jobStore.clear();
     }
 
@@ -96,11 +94,11 @@ public class GcmJobServiceTest {
 
     @Test
     public void testJobRuns() {
-        long delayMs = 2000;
+        long delayMs = 5000;
         DeviceTestUtils.setNetworkInfo(context, true, false, true);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED).build(),
-                AlarmScheduler.TAG));
+                JobCreator.create(context, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
+                GcmScheduler.TAG));
         executeService(0);
 
         assertBoundServiceCount(1);
@@ -111,60 +109,23 @@ public class GcmJobServiceTest {
         long delayMs = 5;
         DeviceTestUtils.setNetworkInfo(context, true, false, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING).build(),
-                AlarmScheduler.TAG));
+                JobCreator.create(context, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED).build(),
+                GcmScheduler.TAG));
         executeService(0);
 
         assertBoundServiceCount(1);
 
-        Thread.sleep(THREAD_WAIT_MS + delayMs);
+        JobCreator.waitForJob(0);
 
         assertBoundServiceCount(0);
     }
 
     @Test
-    public void testNotRoamingConstraint() {
-        DeviceTestUtils.setNetworkInfo(context, true, true, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING).build(),
-                GcmScheduler.TAG));
-
-        assertEquals(1, jobStore.size());
-
-        executeService(0);
-
-        assertEquals(1, jobStore.size());
-
-        DeviceTestUtils.setNetworkInfo(context, true, false, false);
-        executeService(0);
-
-        assertEquals(0, jobStore.size());
-    }
-
-    @Test
-    public void testIdleConstraint() {
-        DeviceTestUtils.setDeviceIdle(context, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresDeviceIdle(true).build(), GcmScheduler.TAG));
-
-        assertEquals(1, jobStore.size());
-
-        executeService(0);
-
-        assertEquals(1, jobStore.size());
-
-        DeviceTestUtils.setDeviceIdle(context, true);
-        executeService(0);
-
-        assertEquals(0, jobStore.size());
-    }
-
-    @Test
     public void testDeadlineConstraint() {
         long latency = TimeUnit.HOURS.toMillis(2);
-        DeviceTestUtils.setDeviceIdle(context, false);
+        DeviceTestUtils.setCharging(context, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresDeviceIdle(true).setOverrideDeadline(latency).build(),
+                JobCreator.create(context, 0).setRequiresCharging(true).setOverrideDeadline(latency).build(),
                 GcmScheduler.TAG));
 
         assertEquals(1, jobStore.size());
@@ -185,9 +146,16 @@ public class GcmJobServiceTest {
 
     private void executeService(int jobId) {
         Intent intent = new Intent(GcmJobService.ACTION_EXECUTE);
-        intent.putExtra(GcmJobService.EXTRA_TAG, String.valueOf(jobId));
-        intent.putExtra(GcmJobService.EXTRA_EXTRAS, Bundle.EMPTY);
-        intent.putExtra(GcmJobService.EXTRA_CALLBACK, new PendingCallback(Parcel.obtain()));
+        intent.putExtra(GcmIntentParser.BUNDLE_KEY_TAG, String.valueOf(jobId));
+        intent.putExtra(GcmIntentParser.BUNDLE_KEY_EXTRAS, Bundle.EMPTY);
+        Parcel parcel = Parcel.obtain();
+        try {
+            parcel.writeStrongBinder(new Binder());
+            parcel.setDataPosition(0);
+            intent.putExtra(GcmIntentParser.BUNDLE_KEY_CALLBACK, new PendingCallback(parcel));
+        } finally {
+            parcel.recycle();
+        }
         service.onStartCommand(intent, 0, 0);
     }
 }

@@ -3,11 +3,9 @@ package com.doist.jobschedulercompat.scheduler.jobscheduler;
 import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
-import com.doist.jobschedulercompat.job.JobStore;
+import com.doist.jobschedulercompat.util.BundleUtils;
 import com.doist.jobschedulercompat.util.JobCreator;
-import com.doist.jobschedulercompat.util.NoopAsyncJobService;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -19,32 +17,38 @@ import android.annotation.TargetApi;
 import android.app.job.JobScheduler;
 import android.content.ComponentName;
 import android.content.Context;
+import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 @TargetApi(Build.VERSION_CODES.N)
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class)
+@Config(constants = BuildConfig.class,
+        sdk = {Build.VERSION_CODES.LOLLIPOP, Build.VERSION_CODES.N, Build.VERSION_CODES.O})
 public class JobSchedulerSchedulerTest {
     private Context context;
-    private JobSchedulerScheduler scheduler;
+    private JobSchedulerSchedulerV21 scheduler;
     private JobScheduler jobScheduler;
 
     @Before
     public void setup() {
         context = RuntimeEnvironment.application;
-        scheduler = new JobSchedulerScheduler(context, JobStore.get(context));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            scheduler = new JobSchedulerSchedulerV26(context);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            scheduler = new JobSchedulerSchedulerV24(context);
+        } else {
+            scheduler = new JobSchedulerSchedulerV21(context);
+        }
         jobScheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
-    }
-
-    @After
-    public void teardown() {
-        NoopAsyncJobService.stopAll();
     }
 
     @Test
@@ -69,17 +73,6 @@ public class JobSchedulerSchedulerTest {
         nativeJob = getPendingJob(2);
         assertNotNull(nativeJob);
         assertNativeJobInfoMatchesJobInfo(nativeJob, job);
-    }
-
-    @Test
-    @Config(sdk = Build.VERSION_CODES.LOLLIPOP)
-    public void testScheduleNotRoamingJobOnLollipop() {
-        scheduler.schedule(JobCreator.create(context, 0)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING).build());
-
-        android.app.job.JobInfo nativeJob = getPendingJob(0);
-        assertNotNull(nativeJob);
-        assertEquals(nativeJob.getNetworkType(), android.app.job.JobInfo.NETWORK_TYPE_ANY);
     }
 
     @Test
@@ -113,34 +106,55 @@ public class JobSchedulerSchedulerTest {
         assertEquals(nativeJob.isPersisted(), job.isPersisted());
         assertEquals(nativeJob.getInitialBackoffMillis(), job.getInitialBackoffMillis());
         assertEquals(nativeJob.getBackoffPolicy(), job.getBackoffPolicy());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            assertEquals(nativeJob.getFlexMillis(), job.getFlexMillis());
+            assertArrayEquals(getUris(nativeJob.getTriggerContentUris()), getUris(job.getTriggerContentUris()));
+            assertEquals(nativeJob.getTriggerContentUpdateDelay(), job.getTriggerContentUpdateDelay());
+            assertEquals(nativeJob.getTriggerContentMaxDelay(), job.getTriggerContentMaxDelay());
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            assertEquals(
+                    BundleUtils.toMap(nativeJob.getTransientExtras(), 10),
+                    BundleUtils.toMap(job.getTransientExtras(), 10));
+            assertEquals(nativeJob.isRequireBatteryNotLow(), job.isRequireBatteryNotLow());
+            assertEquals(nativeJob.isRequireStorageNotLow(), job.isRequireBatteryNotLow());
+        }
     }
 
     private JobInfo createJob(int id) {
         switch (id) {
             case 0:
                 return JobCreator.create(context, id, 0)
-                        .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
-                        .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
-                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
-                        .setPersisted(true)
-                        .build();
+                                 .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
+                                 .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
+                                 .setRequiresCharging(true)
+                                 .setPersisted(true)
+                                 .build();
 
             case 1:
                 PersistableBundle extras = new PersistableBundle();
                 extras.putString("test", "test");
+                Bundle transientExtras = new Bundle();
+                transientExtras.putString("test2", "test2");
                 return JobCreator.create(context, id, 0)
-                        .setRequiresCharging(true)
-                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                        .setExtras(extras)
-                        .build();
+                                 .setRequiresCharging(true)
+                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                                 .setExtras(extras)
+                                 .setTransientExtras(transientExtras)
+                                 .addTriggerContentUri(new JobInfo.TriggerContentUri(
+                                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                         JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
+                                 .setTriggerContentUpdateDelay(TimeUnit.SECONDS.toMillis(1))
+                                 .setTriggerContentMaxDelay(TimeUnit.SECONDS.toMillis(30))
+                                 .build();
 
             case 2:
             default:
                 return JobCreator.create(context, id, 0)
-                        .setPeriodic(TimeUnit.MINUTES.toMillis(30))
-                        .setRequiresDeviceIdle(true)
-                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
-                        .build();
+                                 .setPeriodic(TimeUnit.MINUTES.toMillis(30), TimeUnit.MINUTES.toMillis(5))
+                                 .setRequiresDeviceIdle(true)
+                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                                 .build();
         }
     }
 
@@ -153,5 +167,29 @@ public class JobSchedulerSchedulerTest {
             }
         }
         return null;
+    }
+
+    private Uri[] getUris(JobInfo.TriggerContentUri[] triggerContentUris) {
+        if (triggerContentUris == null) {
+            return null;
+        } else {
+            Uri[] uris = new Uri[triggerContentUris.length];
+            for (int i = 0; i < uris.length; i++) {
+                uris[i] = triggerContentUris[i].getUri();
+            }
+            return uris;
+        }
+    }
+
+    private Uri[] getUris(android.app.job.JobInfo.TriggerContentUri[] triggerContentUris) {
+        if (triggerContentUris == null) {
+            return null;
+        } else {
+            Uri[] uris = new Uri[triggerContentUris.length];
+            for (int i = 0; i < uris.length; i++) {
+                uris[i] = triggerContentUris[i].getUri();
+            }
+            return uris;
+        }
     }
 }

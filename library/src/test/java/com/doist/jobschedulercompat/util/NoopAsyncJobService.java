@@ -6,8 +6,6 @@ import com.doist.jobschedulercompat.JobService;
 import android.util.SparseArray;
 
 public class NoopAsyncJobService extends JobService {
-    private static final long THREAD_WAIT_MS = 100;
-
     public static final String EXTRA_DELAY = "delay";
 
     private static SparseArray<Thread> threads = new SparseArray<>();
@@ -47,19 +45,26 @@ public class NoopAsyncJobService extends JobService {
         return false;
     }
 
-    public static void stopAll() {
-        for (int i = 0; i < threads.size(); i++) {
-            try {
-                threads.valueAt(i).interrupt();
-            } catch (ClassCastException e) {
-                // Ignore.
+    static void waitForJob(int id) {
+        Thread thread = threads.get(id);
+        if (thread != null) {
+            while (thread.isAlive()) {
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    // Ignore.
+                }
             }
-            try {
-                // Let threads finish.
-                Thread.sleep(THREAD_WAIT_MS);
-            } catch (InterruptedException e) {
-                // Ignore.
-            }
+        }
+    }
+
+    static void interruptJobs() {
+        SparseArray<Thread> currentThreads = threads.clone();
+        for (int i = 0; i < currentThreads.size(); i++) {
+            currentThreads.valueAt(i).interrupt();
+        }
+        for (int i = 0; i < currentThreads.size(); i++) {
+            waitForJob(currentThreads.keyAt(i));
         }
     }
 }

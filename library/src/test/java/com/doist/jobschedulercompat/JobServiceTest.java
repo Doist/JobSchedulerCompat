@@ -3,12 +3,13 @@ package com.doist.jobschedulercompat;
 import com.doist.jobschedulercompat.util.NoopAsyncJobService;
 import com.doist.jobschedulercompat.util.NoopJobService;
 
-import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+
+import android.os.Bundle;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,12 +24,8 @@ public class JobServiceTest {
     private static final long THREAD_WAIT_MS = 100;
     private static final Object THREAD_LOCK = new Object();
 
-    private JobParameters params = new JobParameters(0, PersistableBundle.EMPTY, false);
-
-    @After
-    public void teardown() {
-        NoopAsyncJobService.stopAll();
-    }
+    private JobParameters params =
+            new JobParameters(0, PersistableBundle.EMPTY, Bundle.EMPTY, false, null, null);
 
     @Test
     public void testFinishesSynchronously() {
@@ -99,7 +96,9 @@ public class JobServiceTest {
         final AtomicInteger finished = new AtomicInteger(0);
         for (int i = 0; i < 10; i++) {
             JobParameters params = new JobParameters(
-                    this.params.getJobId() + i, this.params.getExtras(), this.params.isOverrideDeadlineExpired());
+                    this.params.getJobId() + i, this.params.getExtras(), this.params.getTransientExtras(),
+                    this.params.isOverrideDeadlineExpired(), this.params.getTriggeredContentUris(),
+                    this.params.getTriggeredContentAuthorities());
             assertTrue(binder.startJob(params, new JobService.Binder.Callback() {
                 @Override
                 public void jobFinished(JobParameters params, boolean needsReschedule) {

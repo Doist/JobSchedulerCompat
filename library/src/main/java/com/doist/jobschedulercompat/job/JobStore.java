@@ -10,8 +10,16 @@ import org.xmlpull.v1.XmlSerializer;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.net.Uri;
+import android.os.BadParcelableException;
+import android.os.Bundle;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.SystemClock;
 import android.support.annotation.RestrictTo;
+import android.support.annotation.VisibleForTesting;
+import android.text.format.DateUtils;
+import android.util.Base64;
 import android.util.Log;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -24,8 +32,11 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -34,9 +45,11 @@ import java.util.concurrent.TimeUnit;
  * Same as com.android.server.job.JobStore, with minor modifications and unused code removed.
  *
  * Behavioral differences with the framework's JobStore include:
- * - Not assuming all jobs are persisted. The framework is always running but this isn't, so jobs that are not persisted
- * are removed at boot time in {@link JobGcReceiver}.
+ * - Not assuming all jobs are persistent. The framework is always running but this isn't, so jobs that are not
+ * persisted are still stored and removed at boot time in {@link JobGcReceiver}.
  * - Storing each job's scheduler alongside itself to allow picking up on scheduler changes and adjust accordingly.
+ * - Storing compat data, such as transient extras or trigger content uris, which are unnecessary in the framework as
+ * JobScheduler is running all the time and these fields are only applicable to non-persisted jobs.
  */
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public class JobStore {
@@ -48,9 +61,10 @@ public class JobStore {
 
     private final AtomicFile jobsFile;
 
+    @VisibleForTesting final BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(1);
+
     private final Executor executor =
-            new ThreadPoolExecutor(0, 1, 3, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1),
-                                   new ThreadPoolExecutor.DiscardOldestPolicy());
+            new ThreadPoolExecutor(0, 1, 3, TimeUnit.SECONDS, queue, new ThreadPoolExecutor.DiscardOldestPolicy());
 
     private static JobStore instance;
 
@@ -96,9 +110,7 @@ public class JobStore {
      */
     public void add(JobStatus jobStatus) {
         jobSet.add(jobStatus);
-        if (jobStatus.isPersisted()) {
-            maybeWriteStatusToDiskAsync();
-        }
+        maybeWriteStatusToDiskAsync();
     }
 
     boolean containsJob(JobStatus jobStatus) {
@@ -116,9 +128,7 @@ public class JobStore {
         JobStatus jobStatus = jobSet.get(jobId);
         if (jobStatus != null) {
             jobSet.remove(jobStatus);
-            if (jobStatus.isPersisted()) {
-                maybeWriteStatusToDiskAsync();
-            }
+            maybeWriteStatusToDiskAsync();
         }
     }
 
@@ -135,6 +145,8 @@ public class JobStore {
     private static final String XML_TAG_PERIODIC = "periodic";
     private static final String XML_TAG_ONEOFF = "one-off";
     private static final String XML_TAG_EXTRAS = "extras";
+    /** Tag corresponds to compatibility data as JobSchedulerCompat isn't always running like the framework's. */
+    private static final String XML_TAG_COMPAT = "compat";
 
     /**
      * Every time the state changes we write all the jobs in one swath, instead of trying to
@@ -173,12 +185,14 @@ public class JobStore {
                 out.attribute(null, "version", Integer.toString(JOBS_FILE_VERSION));
                 for (int i = 0; i < jobs.size(); i++) {
                     JobStatus jobStatus = jobs.get(i);
+                    JobInfo job = jobStatus.getJob();
                     out.startTag(null, "job");
                     addAttributesToJobTag(out, jobStatus);
-                    out.attribute(null, "scheduler", jobStatus.getScheduler());
+                    out.attribute(null, "scheduler", jobStatus.getSchedulerTag());
+                    writeCompatToXml(jobStatus, job, out);
                     writeConstraintsToXml(out, jobStatus);
                     writeExecutionCriteriaToXml(out, jobStatus);
-                    writePersistableBundleToXml(jobStatus.getExtras(), out);
+                    writeBundleToXml(job.getExtras(), out);
                     out.endTag(null, "job");
                 }
                 out.endTag(null, "job-info");
@@ -198,18 +212,12 @@ public class JobStore {
         /**
          * Write out a tag with data comprising the required fields and priority of this job and its client.
          */
+
         private void addAttributesToJobTag(XmlSerializer out, JobStatus jobStatus) throws IOException {
             out.attribute(null, "jobid", Integer.toString(jobStatus.getJobId()));
-            out.attribute(null, "package", jobStatus.getService().getPackageName());
-            out.attribute(null, "class", jobStatus.getService().getClassName());
+            out.attribute(null, "package", jobStatus.getServiceComponent().getPackageName());
+            out.attribute(null, "class", jobStatus.getServiceComponent().getClassName());
             out.attribute(null, "persisted", Boolean.toString(jobStatus.isPersisted()));
-        }
-
-        private void writePersistableBundleToXml(PersistableBundle extras, XmlSerializer out)
-                throws IOException, XmlPullParserException {
-            out.startTag(null, XML_TAG_EXTRAS);
-            XmlUtils.writeMapXml(extras.toMap(10), out);
-            out.endTag(null, XML_TAG_EXTRAS);
         }
 
         /**
@@ -217,20 +225,26 @@ public class JobStore {
          */
         private void writeConstraintsToXml(XmlSerializer out, JobStatus jobStatus) throws IOException {
             out.startTag(null, XML_TAG_PARAMS_CONSTRAINTS);
-            if (jobStatus.hasChargingConstraint()) {
-                out.attribute(null, "charging", Boolean.toString(true));
+            if (jobStatus.needsAnyConnectivity()) {
+                out.attribute(null, "connectivity", Boolean.toString(true));
+            }
+            if (jobStatus.needsMeteredConnectivity()) {
+                out.attribute(null, "metered", Boolean.toString(true));
+            }
+            if (jobStatus.needsUnmeteredConnectivity()) {
+                out.attribute(null, "unmetered", Boolean.toString(true));
+            }
+            if (jobStatus.needsNonRoamingConnectivity()) {
+                out.attribute(null, "not-roaming", Boolean.toString(true));
             }
             if (jobStatus.hasIdleConstraint()) {
                 out.attribute(null, "idle", Boolean.toString(true));
             }
-            if (jobStatus.hasConnectivityConstraint()) {
-                out.attribute(null, "connectivity", Boolean.toString(true));
+            if (jobStatus.hasChargingConstraint()) {
+                out.attribute(null, "charging", Boolean.toString(true));
             }
-            if (jobStatus.hasNotRoamingConstraint()) {
-                out.attribute(null, "not-roaming", Boolean.toString(true));
-            }
-            if (jobStatus.hasUnmeteredConstraint()) {
-                out.attribute(null, "unmetered", Boolean.toString(true));
+            if (jobStatus.hasBatteryNotLowConstraint()) {
+                out.attribute(null, "battery-not-low", Boolean.toString(true));
             }
             out.endTag(null, XML_TAG_PARAMS_CONSTRAINTS);
         }
@@ -240,6 +254,7 @@ public class JobStore {
             if (jobStatus.getJob().isPeriodic()) {
                 out.startTag(null, XML_TAG_PERIODIC);
                 out.attribute(null, "period", Long.toString(job.getIntervalMillis()));
+                out.attribute(null, "flex", Long.toString(job.getFlexMillis()));
             } else {
                 out.startTag(null, XML_TAG_ONEOFF);
             }
@@ -269,6 +284,52 @@ public class JobStore {
             } else {
                 out.endTag(null, XML_TAG_ONEOFF);
             }
+        }
+
+        private void writeBundleToXml(PersistableBundle extras, XmlSerializer out)
+                throws IOException, XmlPullParserException {
+            out.startTag(null, XML_TAG_EXTRAS);
+            XmlUtils.writeMapXml(extras.toMap(10), out);
+            out.endTag(null, XML_TAG_EXTRAS);
+        }
+
+        /**
+         * Write out fields that wouldn't be needed in the framework's APIs,
+         * because JobSchedulerService is always running and never killed.
+         */
+        private void writeCompatToXml(JobStatus jobStatus, JobInfo job, XmlSerializer out)
+                throws IOException, XmlPullParserException {
+            out.startTag(null, XML_TAG_COMPAT);
+            Bundle compat = new Bundle();
+
+            JobInfo.TriggerContentUri[] triggerUris = job.getTriggerContentUris();
+            if (triggerUris != null) {
+                compat.putParcelableArrayList("trigger-content-uris", new ArrayList<>(Arrays.asList(triggerUris)));
+                compat.putLong("trigger-content-update-delay", job.getTriggerContentUpdateDelay());
+                compat.putLong("trigger-content-max-delay", job.getMaxExecutionDelayMillis());
+            }
+
+            if (jobStatus.changedUris != null) {
+                compat.putParcelableArrayList(
+                        "changed-uris",
+                        new ArrayList<>(jobStatus.changedUris));
+                compat.putStringArrayList(
+                        "changed-authorities",
+                        new ArrayList<>(jobStatus.changedAuthorities));
+            }
+
+            compat.putBundle("transient-extras", job.getTransientExtras());
+
+            out.attribute(null, "data", Base64.encodeToString(parcelableToByteArray(compat), Base64.DEFAULT));
+            out.endTag(null, XML_TAG_COMPAT);
+        }
+
+        private <T extends Parcelable> byte[] parcelableToByteArray(T parcelable) {
+            Parcel parcel = Parcel.obtain();
+            parcel.writeParcelable(parcelable, 0);
+            byte[] data = parcel.marshall();
+            parcel.recycle();
+            return data;
         }
     }
 
@@ -377,6 +438,27 @@ public class JobStore {
             }
 
             int eventType;
+            // Read out compat Bundle.
+            do {
+                eventType = parser.next();
+            } while (eventType == XmlPullParser.TEXT);
+            if (!(eventType == XmlPullParser.START_TAG && XML_TAG_COMPAT.equals(parser.getName()))) {
+                // Expecting a <compat> start tag.
+                return null;
+            }
+            // Consume compat start tag.
+            parser.next();
+            Bundle compat;
+            try {
+                compat = byteArrayToParcelable(Base64.decode(parser.getAttributeValue(null, "data"), Base64.DEFAULT));
+            } catch (BadParcelableException e) {
+                // A system update has changed Bundle's implementation. Safe to ignore as a reboot must've happened,
+                // and all compat fields are discarded on reboots.
+                compat = null;
+            }
+            // Consume compat end tag.
+            parser.next();
+
             // Read out constraints tag.
             do {
                 eventType = parser.next();
@@ -404,9 +486,9 @@ public class JobStore {
             }
 
             // Tuple of (earliest runtime, latest runtime) in elapsed realtime after disk load.
-            Pair<Long, Long> runtimes;
+            Pair<Long, Long> elapsedRuntimes;
             try {
-                runtimes = buildExecutionTimesFromXml(parser);
+                elapsedRuntimes = buildExecutionTimesFromXml(parser);
             } catch (NumberFormatException e) {
                 Log.w(LOG_TAG, "Error parsing execution time parameters, skipping");
                 return null;
@@ -417,18 +499,37 @@ public class JobStore {
                 try {
                     String val = parser.getAttributeValue(null, "period");
                     final long periodMillis = Long.parseLong(val);
-                    jobBuilder.setPeriodic(periodMillis);
+                    final long flexMillis = (val != null) ? Long.valueOf(val) : periodMillis;
+                    jobBuilder.setPeriodic(periodMillis, flexMillis);
+                    // As a sanity check, cap the recreated run time to be no later than flex+period
+                    // from now. This is the latest the periodic could be pushed out. This could
+                    // happen if the periodic ran early (at flex time before period), and then the
+                    // device rebooted.
+                    if (elapsedRuntimes.second > elapsedNow + periodMillis + flexMillis) {
+                        final long clampedLateRuntimeElapsed = elapsedNow + flexMillis
+                                + periodMillis;
+                        final long clampedEarlyRuntimeElapsed = clampedLateRuntimeElapsed
+                                - flexMillis;
+                        Log.w(LOG_TAG,
+                              String.format("Periodic job persisted run-time is too big [%s, %s]. Clamping to [%s,%s]",
+                                            DateUtils.formatElapsedTime(elapsedRuntimes.first / 1000),
+                                            DateUtils.formatElapsedTime(elapsedRuntimes.second / 1000),
+                                            DateUtils.formatElapsedTime(clampedEarlyRuntimeElapsed / 1000),
+                                            DateUtils.formatElapsedTime(clampedLateRuntimeElapsed / 1000)));
+                        elapsedRuntimes =
+                                Pair.create(clampedEarlyRuntimeElapsed, clampedLateRuntimeElapsed);
+                    }
                 } catch (NumberFormatException e) {
                     Log.w(LOG_TAG, "Error reading periodic execution criteria, skipping");
                     return null;
                 }
             } else if (XML_TAG_ONEOFF.equals(parser.getName())) {
                 try {
-                    if (runtimes.first != JobStatus.NO_EARLIEST_RUNTIME) {
-                        jobBuilder.setMinimumLatency(runtimes.first - elapsedNow);
+                    if (elapsedRuntimes.first != JobStatus.NO_EARLIEST_RUNTIME) {
+                        jobBuilder.setMinimumLatency(elapsedRuntimes.first - elapsedNow);
                     }
-                    if (runtimes.second != JobStatus.NO_LATEST_RUNTIME) {
-                        jobBuilder.setOverrideDeadline(runtimes.second - elapsedNow);
+                    if (elapsedRuntimes.second != JobStatus.NO_LATEST_RUNTIME) {
+                        jobBuilder.setOverrideDeadline(elapsedRuntimes.second - elapsedNow);
                     }
                 } catch (NumberFormatException e) {
                     Log.w(LOG_TAG, "Error reading job execution criteria, skipping");
@@ -454,18 +555,26 @@ public class JobStore {
             }
             // Consume extras start tag.
             parser.next();
-
             try {
                 PersistableBundle extras = new PersistableBundle(XmlUtils.readMapXml(parser, XML_TAG_EXTRAS), 10);
                 jobBuilder.setExtras(extras);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-            // Consume </extras>.
+            // Consume extras end tag.
             parser.nextTag();
 
-            // And now we're done
-            return new JobStatus(jobBuilder.build(), scheduler, runtimes.first, runtimes.second);
+            // Add to JobInfo from compat.
+            buildJobInfoFromCompat(jobBuilder, compat);
+
+            // And now we're done.
+            JobStatus jobStatus =
+                    new JobStatus(jobBuilder.build(), scheduler, elapsedRuntimes.first, elapsedRuntimes.second);
+
+            // Add to JobStatus from compat.
+            buildJobStatusFromCompat(jobStatus, compat);
+
+            return jobStatus;
         }
 
         private JobInfo.Builder buildBuilderFromXml(XmlPullParser parser) throws NumberFormatException {
@@ -480,25 +589,29 @@ public class JobStore {
         }
 
         private void buildConstraintsFromXml(JobInfo.Builder jobBuilder, XmlPullParser parser) {
-            String val = parser.getAttributeValue(null, "charging");
-            if (val != null) {
-                jobBuilder.setRequiresCharging(true);
-            }
-            val = parser.getAttributeValue(null, "idle");
-            if (val != null) {
-                jobBuilder.setRequiresDeviceIdle(true);
-            }
-            val = parser.getAttributeValue(null, "connectivity");
+            String val = parser.getAttributeValue(null, "connectivity");
             if (val != null) {
                 jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY);
+            }
+            val = parser.getAttributeValue(null, "metered");
+            if (val != null) {
+                jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_METERED);
+            }
+            val = parser.getAttributeValue(null, "unmetered");
+            if (val != null) {
+                jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED);
             }
             val = parser.getAttributeValue(null, "not-roaming");
             if (val != null) {
                 jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING);
             }
-            val = parser.getAttributeValue(null, "unmetered");
+            val = parser.getAttributeValue(null, "idle");
             if (val != null) {
-                jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED);
+                jobBuilder.setRequiresDeviceIdle(true);
+            }
+            val = parser.getAttributeValue(null, "charging");
+            if (val != null) {
+                jobBuilder.setRequiresCharging(true);
             }
         }
 
@@ -514,6 +627,56 @@ public class JobStore {
                 int backoffPolicy = Integer.parseInt(val);  // Will throw NFE which we catch higher up.
                 jobBuilder.setBackoffCriteria(initialBackoff, backoffPolicy);
             }
+        }
+
+        /**
+         * Read out {@link JobInfo.Builder} fields that wouldn't be needed in the framework's APIs,
+         * because JobSchedulerService is always running and never killed.
+         */
+        private void buildJobInfoFromCompat(JobInfo.Builder jobBuilder, Bundle compat) {
+            if (compat != null) {
+                List<JobInfo.TriggerContentUri> triggerContentUris =
+                        compat.getParcelableArrayList("trigger-content-uris");
+                if (triggerContentUris != null) {
+                    for (JobInfo.TriggerContentUri triggerContentUri : triggerContentUris) {
+                        jobBuilder.addTriggerContentUri(triggerContentUri);
+                    }
+                    jobBuilder.setTriggerContentUpdateDelay(compat.getLong("trigger-content-update-delay"));
+                    jobBuilder.setTriggerContentMaxDelay(compat.getLong("trigger-content-max-delay"));
+                }
+
+                Bundle transientExtras = compat.getBundle("transient-extras");
+                if (transientExtras != null) {
+                    jobBuilder.setTransientExtras(transientExtras);
+                }
+            }
+        }
+
+
+        /**
+         * Read out {@link JobStatus} fields that wouldn't be needed in the framework's APIs,
+         * because JobSchedulerService is always running and never killed.
+         */
+        private void buildJobStatusFromCompat(JobStatus jobStatus, Bundle compat) {
+            if (compat != null) {
+                List<Uri> changedUris = compat.getParcelableArrayList("changed-uris");
+                if (changedUris != null) {
+                    jobStatus.changedUris = new HashSet<>(changedUris);
+                }
+                List<String> changedAuthorities = compat.getStringArrayList("changed-authorities");
+                if (changedAuthorities != null) {
+                    jobStatus.changedAuthorities = new HashSet<>(changedAuthorities);
+                }
+            }
+        }
+
+        private <T extends Parcelable> T byteArrayToParcelable(byte[] data) {
+            Parcel parcel = Parcel.obtain();
+            parcel.unmarshall(data, 0, data.length);
+            parcel.setDataPosition(0);
+            T parcelable = parcel.readParcelable(Parcelable.class.getClassLoader());
+            parcel.recycle();
+            return parcelable;
         }
 
         /**
@@ -556,7 +719,7 @@ public class JobStore {
 
         List<JobStatus> getJobs() {
             List<JobStatus> jobs = new ArrayList<>(size());
-            for (int i = 0; i < size(); i++) {
+            for (int i = size() - 1; i >= 0; i--) {
                 jobs.add(mJobs.valueAt(i));
             }
             return jobs;
@@ -564,9 +727,9 @@ public class JobStore {
 
         List<JobStatus> getJobsByScheduler(String scheduler) {
             List<JobStatus> jobs = new ArrayList<>(size());
-            for (int i = 0; i < size(); i++) {
+            for (int i = size() - 1; i >= 0; i--) {
                 JobStatus jobStatus = mJobs.valueAt(i);
-                if (scheduler != null && scheduler.equals(jobStatus.getScheduler())) {
+                if (scheduler != null && scheduler.equals(jobStatus.getSchedulerTag())) {
                     jobs.add(jobStatus);
                 }
             }

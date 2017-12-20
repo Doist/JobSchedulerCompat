@@ -30,4 +30,12 @@ public class JobCreator {
         }
         return builder;
     }
+
+    public static void waitForJob(int id) {
+        NoopAsyncJobService.waitForJob(id);
+    }
+
+    public static void interruptJobs() {
+        NoopAsyncJobService.interruptJobs();
+    }
 }

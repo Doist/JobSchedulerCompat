@@ -1,12 +1,10 @@
 package com.doist.jobschedulercompat.scheduler.jobscheduler;
 
 import com.doist.jobschedulercompat.BuildConfig;
-import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.util.DeviceTestUtils;
 import com.doist.jobschedulercompat.util.JobCreator;
-import com.doist.jobschedulercompat.util.NoopAsyncJobService;
 import com.doist.jobschedulercompat.util.ShadowJobParameters;
 import com.doist.jobschedulercompat.util.ShadowNetworkInfo;
 
@@ -28,9 +26,10 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, shadows = {ShadowJobParameters.class, ShadowNetworkInfo.class})
+@Config(constants = BuildConfig.class,
+        sdk = {Build.VERSION_CODES.LOLLIPOP, Build.VERSION_CODES.N, Build.VERSION_CODES.O},
+        shadows = {ShadowJobParameters.class, ShadowNetworkInfo.class})
 public class JobSchedulerJobServiceTest {
-    private static final long THREAD_WAIT_MS = 100;
     private static final long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
 
     private Context context;
@@ -41,23 +40,23 @@ public class JobSchedulerJobServiceTest {
     public void setup() {
         context = RuntimeEnvironment.application;
         jobStore = JobStore.get(context);
-        service = Robolectric.buildService(JobSchedulerJobService.class).create().get();
+        service = Robolectric.buildService(JobSchedulerJobService.class).create().bind().get();
     }
 
     @After
     public void teardown() {
-        NoopAsyncJobService.stopAll();
+        JobCreator.interruptJobs();
         jobStore.clear();
     }
 
     @Test
     public void testJobRuns() {
-        long delayMs = 2000;
+        long delayMs = 5000;
         jobStore.add(JobStatus.createFromJobInfo(
                 JobCreator.create(context, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
-                JobSchedulerScheduler.TAG));
+                JobSchedulerSchedulerV26.TAG));
         DeviceTestUtils.advanceTime(LATENCY_MS);
-        executeService(0, false);
+        executeService(0);
 
         assertBoundServiceCount(1);
     }
@@ -67,13 +66,13 @@ public class JobSchedulerJobServiceTest {
         long delayMs = 5;
         jobStore.add(JobStatus.createFromJobInfo(
                 JobCreator.create(context, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
-                JobSchedulerScheduler.TAG));
+                JobSchedulerSchedulerV26.TAG));
         DeviceTestUtils.advanceTime(LATENCY_MS);
-        executeService(0, false);
+        executeService(0);
 
         assertBoundServiceCount(1);
 
-        Thread.sleep(THREAD_WAIT_MS + delayMs);
+        JobCreator.waitForJob(0);
 
         assertBoundServiceCount(0);
     }
@@ -81,75 +80,22 @@ public class JobSchedulerJobServiceTest {
     @Test
     public void testStopJobStopsJob() {
         DeviceTestUtils.setCharging(context, true);
-        long delayMs = 2000;
+        long delayMs = 5000;
         JobStatus jobStatus = JobStatus.createFromJobInfo(
                 JobCreator.create(context, 0, delayMs).setRequiresCharging(true).build(),
-                JobSchedulerScheduler.TAG);
+                JobSchedulerSchedulerV26.TAG);
         jobStore.add(jobStatus);
-        executeService(0, false);
+        executeService(0);
 
         assertBoundServiceCount(1);
 
-        service.onStopJob(ShadowJobParameters.newInstance(jobStore.getJob(0), false));
+        service.onStopJob(ShadowJobParameters.newInstance(jobStore.getJob(0)));
 
         assertBoundServiceCount(0);
     }
 
-    @Test
-    @Config(sdk = Build.VERSION_CODES.LOLLIPOP)
-    public void testNotRoamingConstraintOnLollipop() {
-        DeviceTestUtils.setNetworkInfo(context, true, true, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING).build(),
-                JobSchedulerScheduler.TAG));
-
-        assertEquals(1, jobStore.size());
-
-        executeService(0, false);
-
-        assertEquals(1, jobStore.size());
-
-        DeviceTestUtils.setNetworkInfo(context, true, false, false);
-        executeService(0, false);
-
-        assertEquals(0, jobStore.size());
-    }
-
-    @Test
-    @Config(sdk = Build.VERSION_CODES.LOLLIPOP)
-    public void testIdleConstraintOnLollipop() {
-        DeviceTestUtils.setDeviceIdle(context, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresDeviceIdle(true).build(), JobSchedulerScheduler.TAG));
-
-        assertEquals(1, jobStore.size());
-
-        executeService(0, false);
-
-        assertEquals(1, jobStore.size());
-
-        DeviceTestUtils.setDeviceIdle(context, true);
-        executeService(0, false);
-
-        assertEquals(0, jobStore.size());
-    }
-
-    @Test
-    @Config(sdk = Build.VERSION_CODES.LOLLIPOP)
-    public void testDeadlineConstraintOnLollipop() {
-        DeviceTestUtils.setDeviceIdle(context, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresDeviceIdle(true).build(), JobSchedulerScheduler.TAG));
-
-        assertEquals(1, jobStore.size());
-
-        executeService(0, true);
-
-        assertEquals(0, jobStore.size());
-    }
-
-    private void executeService(int jobId, boolean isOverrideDeadlineExpired) {
-        service.onStartJob(ShadowJobParameters.newInstance(jobStore.getJob(jobId), isOverrideDeadlineExpired));
+    private void executeService(int jobId) {
+        service.onStartJob(ShadowJobParameters.newInstance(jobStore.getJob(jobId)));
     }
 
     private void assertBoundServiceCount(int count) {

@@ -32,6 +32,16 @@ public class DeviceTestUtils {
         context.sendStickyBroadcast(chargingIntent);
     }
 
+    @SuppressWarnings("deprecation")
+    public static void setStorageNotLow(Context context, boolean storageNotLow) {
+        Intent storageLowIntent = new Intent(Intent.ACTION_DEVICE_STORAGE_LOW);
+        if (storageNotLow) {
+            context.removeStickyBroadcast(storageLowIntent);
+        } else {
+            context.sendStickyBroadcast(storageLowIntent);
+        }
+    }
+
     public static void setDeviceIdle(Context context, boolean idle) {
         ShadowPowerManager manager = shadowOf((PowerManager) context.getSystemService(Context.POWER_SERVICE));
         manager.setIsInteractive(!idle);
