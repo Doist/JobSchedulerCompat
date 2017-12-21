@@ -21,7 +21,7 @@
 
         <service android:name=".scheduler.alarm.AlarmJobService" />
 
-        <service android:name=".scheduler.alarm.AlarmContentObserverService" />
+        <service android:name=".scheduler.alarm.ContentObserverService" />
 
         <receiver
             android:name=".scheduler.alarm.AlarmReceiver"

@@ -29,7 +29,7 @@ import java.util.Set;
  * This service runs whenever new jobs monitor content uris.
  */
 @RestrictTo(RestrictTo.Scope.LIBRARY)
-public class AlarmContentObserverService extends Service {
+public class ContentObserverService extends Service {
     private static final int MAX_URIS_REPORTED = 50;
 
     private JobScheduler jobScheduler;
@@ -139,7 +139,7 @@ public class AlarmContentObserverService extends Service {
                 jobScheduler.addJob(jobStatus);
             }
 
-            AlarmJobService.start(AlarmContentObserverService.this);
+            AlarmJobService.start(ContentObserverService.this);
         }
     }
 }

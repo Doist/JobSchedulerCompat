@@ -188,18 +188,14 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         setComponentEnabled(this, AlarmReceiver.ConnectivityReceiver.class, unsatisfiedConnectivityConstraint);
 
         // Get content constraints.
-        boolean unsatisfiedContentTriggerConstraint = false;
         for (JobStatus jobStatus : jobStatuses) {
             Set<Uri> changedUris = jobStatus.changedUris;
             boolean hasChangedUris = changedUris != null && !changedUris.isEmpty();
             jobStatus.setConstraintSatisfied(JobStatus.CONSTRAINT_CONTENT_TRIGGER, hasChangedUris);
-            unsatisfiedContentTriggerConstraint |= jobStatus.hasContentTriggerConstraint() && !hasChangedUris;
         }
 
-        // Start content observers if there are unmet content trigger constraints.
-        if (unsatisfiedContentTriggerConstraint) {
-            startService(new Intent(this, AlarmContentObserverService.class));
-        }
+        // Register / unregister content observers.
+        startService(new Intent(this, ContentObserverService.class));
 
         // Get timing constraints.
         long nextExpiryTime = Long.MAX_VALUE;

@@ -170,7 +170,7 @@ public class AlarmJobServiceTest {
 
         service.startCommand(0, 0);
 
-        assertEquals(AlarmContentObserverService.class.getCanonicalName(),
+        assertEquals(ContentObserverService.class.getCanonicalName(),
                      ShadowApplication.getInstance().getNextStartedService().getComponent().getClassName());
     }
 

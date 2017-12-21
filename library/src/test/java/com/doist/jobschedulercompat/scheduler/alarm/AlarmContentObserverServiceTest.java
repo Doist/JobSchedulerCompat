@@ -35,13 +35,13 @@ public class AlarmContentObserverServiceTest {
 
     private Context context;
     private JobStore jobStore;
-    private ServiceController<AlarmContentObserverService> service;
+    private ServiceController<ContentObserverService> service;
 
     @Before
     public void setup() {
         context = RuntimeEnvironment.application;
         jobStore = JobStore.get(context);
-        service = Robolectric.buildService(AlarmContentObserverService.class).create();
+        service = Robolectric.buildService(ContentObserverService.class).create();
     }
 
     @After
@@ -65,7 +65,7 @@ public class AlarmContentObserverServiceTest {
         service.startCommand(0, 0);
 
         assertEquals(1, contentResolver.getContentObservers(uri).size());
-        assertThat(contentResolver.getContentObservers(uri), hasItem(isA(AlarmContentObserverService.Observer.class)));
+        assertThat(contentResolver.getContentObservers(uri), hasItem(isA(ContentObserverService.Observer.class)));
     }
 
     @Test
