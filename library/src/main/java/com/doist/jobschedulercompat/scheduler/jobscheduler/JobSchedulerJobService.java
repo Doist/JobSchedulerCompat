@@ -1,6 +1,5 @@
 package com.doist.jobschedulercompat.scheduler.jobscheduler;
 
-import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.JobParameters;
 import com.doist.jobschedulercompat.JobScheduler;
 import com.doist.jobschedulercompat.JobService;
@@ -12,6 +11,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.support.annotation.RestrictTo;
 import android.util.Log;
@@ -47,7 +47,8 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
         Connection connection = connections.get(params.getJobId());
         if (connection != null) {
             JobService.Binder binder = connection.binder;
-            boolean needsReschedule = binder != null && binder.stopJob(toLocalParameters(connection.params));
+            boolean needsReschedule = binder != null
+                    && binder.stopJob(toLocalParameters(connection.params, connection.transientExtras));
             stopJob(connection, needsReschedule);
             return needsReschedule;
         } else {
@@ -70,7 +71,7 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
         int jobId = params.getJobId();
         JobStatus jobStatus = jobScheduler.getJob(jobId);
         if (jobStatus != null) {
-            Connection connection = new Connection(jobId, params);
+            Connection connection = new Connection(jobId, params, jobStatus.getJob().getTransientExtras());
             Intent jobIntent = new Intent();
             ComponentName service = jobStatus.getServiceComponent();
             jobIntent.setComponent(service);
@@ -97,22 +98,21 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
     }
 
-    private JobParameters toLocalParameters(android.app.job.JobParameters params) {
+    private JobParameters toLocalParameters(android.app.job.JobParameters params, Bundle transientExtras) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return new JobParameters(
                     params.getJobId(), new PersistableBundle(params.getExtras()), params.getTransientExtras(),
                     params.isOverrideDeadlineExpired(), params.getTriggeredContentUris(),
                     params.getTriggeredContentAuthorities());
         } else {
-            JobInfo job = jobScheduler.getJob(params.getJobId()).getJob();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 return new JobParameters(
-                        params.getJobId(), new PersistableBundle(params.getExtras()), job.getTransientExtras(),
+                        params.getJobId(), new PersistableBundle(params.getExtras()), transientExtras,
                         params.isOverrideDeadlineExpired(), params.getTriggeredContentUris(),
                         params.getTriggeredContentAuthorities());
             } else {
                 return new JobParameters(
-                        params.getJobId(), new PersistableBundle(params.getExtras()), job.getTransientExtras(),
+                        params.getJobId(), new PersistableBundle(params.getExtras()), transientExtras,
                         params.isOverrideDeadlineExpired(), null, null);
             }
         }
@@ -124,11 +124,14 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
     private class Connection implements ServiceConnection {
         private final int jobId;
         private final android.app.job.JobParameters params;
+        // Used below O.
+        private final Bundle transientExtras;
         private JobService.Binder binder;
 
-        private Connection(int jobId, android.app.job.JobParameters params) {
+        private Connection(int jobId, android.app.job.JobParameters params, Bundle transientExtras) {
             this.jobId = jobId;
             this.params = params;
+            this.transientExtras = transientExtras;
         }
 
         @Override
@@ -139,7 +142,7 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
                 return;
             }
             binder = (JobService.Binder) service;
-            if (!binder.startJob(toLocalParameters(params), JobSchedulerJobService.this)) {
+            if (!binder.startJob(toLocalParameters(params, transientExtras), JobSchedulerJobService.this)) {
                 stopJob(this, false);
             }
         }

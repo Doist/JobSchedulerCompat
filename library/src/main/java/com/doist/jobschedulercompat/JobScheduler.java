@@ -58,11 +58,11 @@ public class JobScheduler {
 
     /** @see android.app.job.JobScheduler#schedule(android.app.job.JobInfo) */
     public int schedule(JobInfo job) {
-        Scheduler scheduler = getSchedulerForJob(context, job);
         synchronized (JobStore.LOCK) {
             if (jobStore.size() > MAX_JOBS) {
                 throw new IllegalStateException("Apps may not schedule more than " + MAX_JOBS + " distinct jobs");
             }
+            Scheduler scheduler = getSchedulerForJob(context, job);
             jobStore.add(JobStatus.createFromJobInfo(job, scheduler.getTag()));
             return scheduler.schedule(job);
         }
@@ -73,9 +73,8 @@ public class JobScheduler {
         synchronized (JobStore.LOCK) {
             JobStatus jobStatus = jobStore.getJob(jobId);
             if (jobStatus != null) {
-                Scheduler scheduler = getSchedulerForTag(context, jobStatus.getSchedulerTag());
                 jobStore.remove(jobId);
-                scheduler.cancel(jobId);
+                getSchedulerForTag(context, jobStatus.getSchedulerTag()).cancel(jobId);
             }
         }
     }
