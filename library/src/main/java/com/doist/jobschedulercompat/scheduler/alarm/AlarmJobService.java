@@ -20,14 +20,15 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.support.annotation.Nullable;
-import android.support.annotation.RestrictTo;
 import android.util.Log;
 import android.util.SparseArray;
 
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
 
 /**
  * Job service for {@link AlarmScheduler}, the {@link AlarmManager}-based scheduler.

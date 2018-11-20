@@ -6,8 +6,9 @@ import com.doist.jobschedulercompat.scheduler.Scheduler;
 
 import android.app.AlarmManager;
 import android.content.Context;
-import android.support.annotation.NonNull;
-import android.support.annotation.RestrictTo;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
 
 /**
  * {@link Scheduler} based on {@link AlarmManager}.

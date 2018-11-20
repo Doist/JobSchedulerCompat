@@ -4,7 +4,8 @@ import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.scheduler.Scheduler;
 
 import android.content.Context;
-import android.support.annotation.NonNull;
+
+import androidx.annotation.NonNull;
 
 public class NoopScheduler extends Scheduler {
     public NoopScheduler(Context context) {
@@ -18,12 +19,10 @@ public class NoopScheduler extends Scheduler {
 
     @Override
     public void cancel(int jobId) {
-
     }
 
     @Override
     public void cancelAll() {
-
     }
 
     @NonNull

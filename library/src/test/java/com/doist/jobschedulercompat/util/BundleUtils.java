@@ -1,10 +1,11 @@
 package com.doist.jobschedulercompat.util;
 
 import android.os.Bundle;
-import android.support.annotation.RestrictTo;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import androidx.annotation.RestrictTo;
 
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public class BundleUtils {

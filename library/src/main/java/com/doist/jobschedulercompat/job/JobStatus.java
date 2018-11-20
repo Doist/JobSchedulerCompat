@@ -5,10 +5,11 @@ import com.doist.jobschedulercompat.JobInfo;
 import android.content.ComponentName;
 import android.net.Uri;
 import android.os.SystemClock;
-import android.support.annotation.NonNull;
-import android.support.annotation.RestrictTo;
 
 import java.util.Set;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
 
 /**
  * Same as com.android.server.job.controllers.JobStatus, with minor modifications and unused code removed.

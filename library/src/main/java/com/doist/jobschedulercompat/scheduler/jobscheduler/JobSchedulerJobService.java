@@ -13,9 +13,10 @@ import android.content.ServiceConnection;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.annotation.RestrictTo;
 import android.util.Log;
 import android.util.SparseArray;
+
+import androidx.annotation.RestrictTo;
 
 /**
  * Job service for {@link JobSchedulerSchedulerV21}, the {@link android.app.job.JobScheduler}-based scheduler.

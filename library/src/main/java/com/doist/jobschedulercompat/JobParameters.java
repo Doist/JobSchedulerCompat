@@ -2,9 +2,10 @@ package com.doist.jobschedulercompat;
 
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.annotation.RestrictTo;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
 
 /** @see android.app.job.JobParameters */
 public class JobParameters {
@@ -32,12 +33,14 @@ public class JobParameters {
     }
 
     /** @see android.app.job.JobParameters#getExtras() */
-    public @NonNull PersistableBundle getExtras() {
+    @NonNull
+    public PersistableBundle getExtras() {
         return extras;
     }
 
     /** @see android.app.job.JobParameters#getTransientExtras() */
-    public @NonNull Bundle getTransientExtras() {
+    @NonNull
+    public Bundle getTransientExtras() {
         return transientExtras;
     }
 
@@ -47,12 +50,14 @@ public class JobParameters {
     }
 
     /** @see android.app.job.JobParameters#getTriggeredContentUris() */
-    public @Nullable Uri[] getTriggeredContentUris() {
+    @Nullable
+    public Uri[] getTriggeredContentUris() {
         return triggeredContentUris;
     }
 
     /** @see android.app.job.JobParameters#getTriggeredContentAuthorities() */
-    public @Nullable String[] getTriggeredContentAuthorities() {
+    @Nullable
+    public String[] getTriggeredContentAuthorities() {
         return triggeredContentAuthorities;
     }
 }

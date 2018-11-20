@@ -6,7 +6,8 @@ import com.doist.jobschedulercompat.JobScheduler;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.support.annotation.RestrictTo;
+
+import androidx.annotation.RestrictTo;
 
 /**
  * Removes all jobs that are not persisted. Typically useful after the device boots.

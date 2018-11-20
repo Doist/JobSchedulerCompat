@@ -5,8 +5,9 @@ import com.doist.jobschedulercompat.JobScheduler;
 import com.doist.jobschedulercompat.job.JobStatus;
 
 import android.content.Context;
-import android.support.annotation.NonNull;
-import android.support.annotation.RestrictTo;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
 
 /**
  * Abstraction to schedule and cancel jobs as defined by {@link JobInfo}.

@@ -3,11 +3,12 @@ package com.doist.jobschedulercompat;
 import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
-import android.support.annotation.NonNull;
-import android.support.annotation.RestrictTo;
 import android.util.SparseArray;
 
 import java.lang.ref.WeakReference;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RestrictTo;
 
 /** @see android.app.job.JobService */
 public abstract class JobService extends Service {

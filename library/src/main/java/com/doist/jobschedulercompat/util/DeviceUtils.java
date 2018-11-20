@@ -9,7 +9,8 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
-import android.support.annotation.RestrictTo;
+
+import androidx.annotation.RestrictTo;
 
 import static android.content.Context.CONNECTIVITY_SERVICE;
 
@@ -27,7 +28,7 @@ public class DeviceUtils {
     public static boolean isBatteryNotLow(Context context) {
         Bundle extras = getBatteryChangedExtras(context);
         int percentage = extras != null ? extras.getInt(BatteryManager.EXTRA_LEVEL, -1)
-                    / extras.getInt(BatteryManager.EXTRA_SCALE, 100) : 0;
+                / extras.getInt(BatteryManager.EXTRA_SCALE, 100) : 0;
         return percentage > 15;
     }
 

@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 
 ext.versions = [
-        support:                "28.0.0",
+        androidx:               "1.0.0",
         play_services:          "15.0.1",
         junit:                  "4.12",
         robolectric:            "3.6.1",
@@ -33,7 +33,7 @@ android {
 }
 
 dependencies {
-    implementation "com.android.support:support-annotations:$versions.support"
+    implementation "androidx.annotation:annotation:$versions.androidx"
     compileOnly "com.google.android.gms:play-services-gcm:$versions.play_services"
     testImplementation "junit:junit:$versions.junit"
     testImplementation "org.robolectric:robolectric:$versions.robolectric"
