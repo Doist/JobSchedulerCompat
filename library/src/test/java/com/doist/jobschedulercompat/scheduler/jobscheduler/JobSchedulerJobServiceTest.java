@@ -1,5 +1,6 @@
 package com.doist.jobschedulercompat.scheduler.jobscheduler;
 
+import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.util.DeviceTestUtils;
@@ -50,28 +51,24 @@ public class JobSchedulerJobServiceTest {
 
     @Test
     public void testJobRuns() {
-        long delayMs = 5000;
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
-                JobSchedulerSchedulerV26.TAG));
+        JobInfo job = JobCreator.create(application, 2000).setMinimumLatency(LATENCY_MS).build();
+        jobStore.add(JobStatus.createFromJobInfo(job, getSchedulerTag()));
         DeviceTestUtils.advanceTime(LATENCY_MS);
-        executeService(0);
+        executeService(job.getId());
 
         assertBoundServiceCount(1);
     }
 
     @Test
     public void testJobFinishes() {
-        long delayMs = 5;
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
-                JobSchedulerSchedulerV26.TAG));
+        JobInfo job = JobCreator.create(application, 50).setMinimumLatency(LATENCY_MS).build();
+        jobStore.add(JobStatus.createFromJobInfo(job, getSchedulerTag()));
         DeviceTestUtils.advanceTime(LATENCY_MS);
-        executeService(0);
+        executeService(job.getId());
 
         assertBoundServiceCount(1);
 
-        JobCreator.waitForJob(0);
+        JobCreator.waitForJob(job.getId());
 
         assertBoundServiceCount(0);
     }
@@ -79,16 +76,14 @@ public class JobSchedulerJobServiceTest {
     @Test
     public void testStopJobStopsJob() {
         DeviceTestUtils.setCharging(application, true);
-        long delayMs = 5000;
-        JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0, delayMs).setRequiresCharging(true).build(),
-                JobSchedulerSchedulerV26.TAG);
+        JobInfo job = JobCreator.create(application, 2000).setRequiresCharging(true).build();
+        JobStatus jobStatus = JobStatus.createFromJobInfo(job, getSchedulerTag());
         jobStore.add(jobStatus);
-        executeService(0);
+        executeService(job.getId());
 
         assertBoundServiceCount(1);
 
-        service.onStopJob(ShadowJobParameters.newInstance(jobStore.getJob(0)));
+        service.onStopJob(ShadowJobParameters.newInstance(jobStore.getJob(job.getId())));
 
         assertBoundServiceCount(0);
     }
@@ -99,5 +94,15 @@ public class JobSchedulerJobServiceTest {
 
     private void assertBoundServiceCount(int count) {
         assertEquals(count, shadowOf(application).getBoundServiceConnections().size());
+    }
+
+    private String getSchedulerTag() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return JobSchedulerSchedulerV26.TAG;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            return JobSchedulerSchedulerV24.TAG;
+        } else {
+            return JobSchedulerSchedulerV21.TAG;
+        }
     }
 }

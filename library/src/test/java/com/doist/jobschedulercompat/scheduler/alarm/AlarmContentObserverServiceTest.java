@@ -57,7 +57,7 @@ public class AlarmContentObserverServiceTest {
         assertEquals(0, shadowOf(contentResolver).getContentObservers(uri).size());
 
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0)
+                JobCreator.create(application)
                           .addTriggerContentUri(new JobInfo.TriggerContentUri(uri, 0))
                           .build(),
                 AlarmScheduler.TAG));
@@ -69,14 +69,13 @@ public class AlarmContentObserverServiceTest {
 
     @Test
     public void testObserversFire() {
-        Uri[] uris = new Uri[]{Uri.parse("doist.com"), Uri.parse("todoist.com"), Uri.parse("twistapp.com")};
+        Uri[] uris = new Uri[]{Uri.parse("doist.com"), Uri.parse("todoist.com"), Uri.parse("twist.com")};
 
         for (int i = 0; i < uris.length; i++) {
-            jobStore.add(JobStatus.createFromJobInfo(
-                    JobCreator.create(application, i, 5000)
-                              .addTriggerContentUri(new JobInfo.TriggerContentUri(uris[i], 0))
-                              .build(),
-                    AlarmScheduler.TAG));
+            JobInfo job = JobCreator.create(application, 2000)
+                                    .addTriggerContentUri(new JobInfo.TriggerContentUri(uris[i], 0))
+                                    .build();
+            jobStore.add(JobStatus.createFromJobInfo(job, AlarmScheduler.TAG));
         }
         service.startCommand(0, 0);
 

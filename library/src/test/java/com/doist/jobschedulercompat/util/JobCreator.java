@@ -10,11 +10,13 @@ import android.os.IBinder;
 import static org.robolectric.Shadows.shadowOf;
 
 public class JobCreator {
-    public static JobInfo.Builder create(Application application, int id) {
-        return create(application, id, 0);
+    private static int id = 0;
+
+    public static JobInfo.Builder create(Application application) {
+        return create(application, 0);
     }
 
-    public static JobInfo.Builder create(Application application, int id, long delay) {
+    public static JobInfo.Builder create(Application application, long delay) {
         ComponentName component;
         PersistableBundle extras;
         IBinder service;
@@ -28,7 +30,7 @@ public class JobCreator {
             extras = PersistableBundle.EMPTY;
             service = new NoopJobService().onBind(null);
         }
-        JobInfo.Builder builder = new JobInfo.Builder(id, component).setExtras(extras);
+        JobInfo.Builder builder = new JobInfo.Builder(id++, component).setExtras(extras);
         shadowOf(application).setComponentNameAndServiceForBindService(component, service);
         return builder;
     }

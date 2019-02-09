@@ -37,7 +37,7 @@ public class AlarmSchedulerTest {
     @Before
     public void setup() {
         application = ApplicationProvider.getApplicationContext();
-        job = JobCreator.create(application, 0, 5000)
+        job = JobCreator.create(application, 2000)
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("doist.com"), 0))
                         .setMinimumLatency(TimeUnit.HOURS.toMillis(1) /* Random constraint. */)
                         .build();

@@ -55,7 +55,7 @@ public class GcmSchedulerTest {
 
     @Test
     public void testScheduleBroadcasts() {
-        JobInfo job = JobCreator.create(application, 0)
+        JobInfo job = JobCreator.create(application)
                                 .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
                                 .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
@@ -69,7 +69,7 @@ public class GcmSchedulerTest {
 
         PersistableBundle extras = new PersistableBundle();
         extras.putString("test", "test");
-        job = JobCreator.create(application, 1)
+        job = JobCreator.create(application)
                         .setExtras(extras)
                         .setPeriodic(TimeUnit.MINUTES.toMillis(30))
                         .setRequiresCharging(true)
@@ -82,7 +82,7 @@ public class GcmSchedulerTest {
         assertNotNull(intent);
         assertIntentMatchesJobInfo(intent, job);
 
-        job = JobCreator.create(application, 2)
+        job = JobCreator.create(application)
                         .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("doist.com"), 0))
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(

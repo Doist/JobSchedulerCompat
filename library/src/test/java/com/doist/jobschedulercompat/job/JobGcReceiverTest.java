@@ -53,22 +53,22 @@ public class JobGcReceiverTest {
     public void testNonPersistedJobsAreCleared() {
         JobScheduler jobScheduler = JobScheduler.get(application);
         jobScheduler.schedule(
-                JobCreator.create(application, 0)
+                JobCreator.create(application)
                           .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                           .setPersisted(true)
                           .build());
         jobScheduler.schedule(
-                JobCreator.create(application, 1)
+                JobCreator.create(application)
                           .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                           .setPersisted(false)
                           .build());
         jobScheduler.schedule(
-                JobCreator.create(application, 2)
+                JobCreator.create(application)
                           .setPeriodic(TimeUnit.HOURS.toMillis(1))
                           .setPersisted(true)
                           .build());
         jobScheduler.schedule(
-                JobCreator.create(application, 3)
+                JobCreator.create(application)
                           .setPeriodic(TimeUnit.HOURS.toMillis(1))
                           .setPersisted(false)
                           .build());

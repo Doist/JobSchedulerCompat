@@ -56,29 +56,30 @@ public class JobSchedulerSchedulerTest {
         JobInfo job = createJob(0);
         scheduler.schedule(job);
 
-        android.app.job.JobInfo nativeJob = getPendingJob(0);
+        android.app.job.JobInfo nativeJob = getPendingJob(job.getId());
         assertNotNull(nativeJob);
         assertNativeJobInfoMatchesJobInfo(nativeJob, job);
 
         job = createJob(1);
         scheduler.schedule(job);
 
-        nativeJob = getPendingJob(1);
+        nativeJob = getPendingJob(job.getId());
         assertNotNull(nativeJob);
         assertNativeJobInfoMatchesJobInfo(nativeJob, job);
 
         job = createJob(2);
         scheduler.schedule(job);
 
-        nativeJob = getPendingJob(2);
+        nativeJob = getPendingJob(job.getId());
         assertNotNull(nativeJob);
         assertNativeJobInfoMatchesJobInfo(nativeJob, job);
     }
 
     @Test
     public void testCancelJob() {
-        scheduler.schedule(createJob(0));
-        scheduler.cancel(0);
+        JobInfo job = createJob(0);
+        scheduler.schedule(job);
+        scheduler.cancel(job.getId());
 
         assertEquals(0, jobScheduler.getAllPendingJobs().size());
     }
@@ -121,10 +122,10 @@ public class JobSchedulerSchedulerTest {
         }
     }
 
-    private JobInfo createJob(int id) {
-        switch (id) {
+    private JobInfo createJob(int type) {
+        switch (type) {
             case 0:
-                return JobCreator.create(application, id, 0)
+                return JobCreator.create(application)
                                  .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
                                  .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
                                  .setRequiresCharging(true)
@@ -136,7 +137,7 @@ public class JobSchedulerSchedulerTest {
                 extras.putString("test", "test");
                 Bundle transientExtras = new Bundle();
                 transientExtras.putString("test2", "test2");
-                return JobCreator.create(application, id, 0)
+                return JobCreator.create(application)
                                  .setRequiresCharging(true)
                                  .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                                  .setExtras(extras)
@@ -150,7 +151,7 @@ public class JobSchedulerSchedulerTest {
 
             case 2:
             default:
-                return JobCreator.create(application, id, 0)
+                return JobCreator.create(application)
                                  .setPeriodic(TimeUnit.MINUTES.toMillis(30), TimeUnit.MINUTES.toMillis(5))
                                  .setRequiresDeviceIdle(true)
                                  .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
@@ -158,12 +159,16 @@ public class JobSchedulerSchedulerTest {
         }
     }
 
-    /* Robolectric doesn't shadow JobScheduler#getPendingJob, so filter manually here. */
+    /* API 23 and below don't support getPendingJob, filter manually if necessary. */
     private android.app.job.JobInfo getPendingJob(int jobId) {
-        List<android.app.job.JobInfo> jobs = jobScheduler.getAllPendingJobs();
-        for (android.app.job.JobInfo job : jobs) {
-            if (job.getId() == jobId) {
-                return job;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            return jobScheduler.getPendingJob(jobId);
+        } else {
+            List<android.app.job.JobInfo> jobs = jobScheduler.getAllPendingJobs();
+            for (android.app.job.JobInfo job : jobs) {
+                if (job.getId() == jobId) {
+                    return job;
+                }
             }
         }
         return null;

@@ -58,14 +58,13 @@ public class AlarmReceiverTest {
 
         assertFalse(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
 
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build(),
-                AlarmScheduler.TAG));
+        JobInfo job = JobCreator.create(application).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build();
+        jobStore.add(JobStatus.createFromJobInfo(job, AlarmScheduler.TAG));
         service.startCommand(0, 0);
 
         assertTrue(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
 
-        jobStore.remove(0);
+        jobStore.remove(job.getId());
         service.startCommand(0, 0);
 
         assertFalse(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
@@ -79,7 +78,7 @@ public class AlarmReceiverTest {
 
         DeviceTestUtils.setCharging(application, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setRequiresCharging(true).build(), AlarmScheduler.TAG));
+                JobCreator.create(application).setRequiresCharging(true).build(), AlarmScheduler.TAG));
         service.startCommand(0, 0);
 
         assertTrue(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
@@ -98,7 +97,7 @@ public class AlarmReceiverTest {
 
         DeviceTestUtils.setStorageNotLow(application, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setRequiresStorageNotLow(true).build(), AlarmScheduler.TAG));
+                JobCreator.create(application).setRequiresStorageNotLow(true).build(), AlarmScheduler.TAG));
         service.startCommand(0, 0);
 
         assertTrue(DeviceTestUtils.isComponentEnabled(packageManager, receiver));
@@ -117,7 +116,7 @@ public class AlarmReceiverTest {
 
         DeviceTestUtils.setNetworkInfo(application, false, false, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
+                JobCreator.create(application).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
                 AlarmScheduler.TAG));
         service.startCommand(0, 0);
 

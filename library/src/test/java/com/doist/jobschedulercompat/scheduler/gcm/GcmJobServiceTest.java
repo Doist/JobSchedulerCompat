@@ -68,55 +68,53 @@ public class GcmJobServiceTest {
     @Test
     public void testInitializeSendsBroadcastsSchedules() {
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 1).setRequiresCharging(true).build(), GcmScheduler.TAG));
+                JobCreator.create(application).setRequiresCharging(true).build(), GcmScheduler.TAG));
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 2).setRequiresDeviceIdle(true).build(), GcmScheduler.TAG));
+                JobCreator.create(application).setRequiresDeviceIdle(true).build(), GcmScheduler.TAG));
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 3).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), GcmScheduler.TAG));
+                JobCreator.create(application).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), GcmScheduler.TAG));
 
-        final AtomicInteger idSum = new AtomicInteger(0);
+        final AtomicInteger idCount = new AtomicInteger(0);
         application.registerReceiver(new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (GcmScheduler.ACTION_SCHEDULE.equals(intent.getAction())
                         && GcmScheduler.SCHEDULER_ACTION_SCHEDULE_TASK.equals(
                         intent.getStringExtra(GcmScheduler.BUNDLE_PARAM_SCHEDULER_ACTION))) {
-                    idSum.addAndGet(Integer.valueOf(intent.getStringExtra(GcmScheduler.PARAM_TAG)));
+                    idCount.getAndIncrement();
                 }
             }
         }, new IntentFilter(GcmScheduler.ACTION_SCHEDULE));
 
-        assertEquals(0, idSum.get());
+        assertEquals(0, idCount.get());
 
         initializeService();
 
-        assertEquals(6, idSum.get());
+        assertEquals(3, idCount.get());
     }
 
     @Test
     public void testJobRuns() {
-        long delayMs = 5000;
         DeviceTestUtils.setNetworkInfo(application, true, false, true);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
-                GcmScheduler.TAG));
-        executeService(0);
+        JobInfo job = JobCreator.create(application, 2000).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build();
+        jobStore.add(JobStatus.createFromJobInfo(job, GcmScheduler.TAG));
+        executeService(job.getId());
 
         assertBoundServiceCount(1);
     }
 
     @Test
     public void testJobFinishes() {
-        long delayMs = 5;
         DeviceTestUtils.setNetworkInfo(application, true, false, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED).build(),
-                GcmScheduler.TAG));
-        executeService(0);
+        JobInfo job = JobCreator.create(application, 50)
+                                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                                .build();
+        jobStore.add(JobStatus.createFromJobInfo(job, GcmScheduler.TAG));
+        executeService(job.getId());
 
         assertBoundServiceCount(1);
 
-        JobCreator.waitForJob(0);
+        JobCreator.waitForJob(job.getId());
 
         assertBoundServiceCount(0);
     }
@@ -125,14 +123,13 @@ public class GcmJobServiceTest {
     public void testDeadlineConstraint() {
         long latency = TimeUnit.HOURS.toMillis(2);
         DeviceTestUtils.setCharging(application, false);
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setRequiresCharging(true).setOverrideDeadline(latency).build(),
-                GcmScheduler.TAG));
+        JobInfo job = JobCreator.create(application).setRequiresCharging(true).setOverrideDeadline(latency).build();
+        jobStore.add(JobStatus.createFromJobInfo(job, GcmScheduler.TAG));
 
         assertEquals(1, jobStore.size());
 
         Robolectric.getForegroundThreadScheduler().advanceBy(latency, TimeUnit.MILLISECONDS);
-        executeService(0);
+        executeService(job.getId());
 
         assertEquals(0, jobStore.size());
     }

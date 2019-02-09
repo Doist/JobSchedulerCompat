@@ -44,7 +44,7 @@ public class JobStoreTest {
 
     @Test
     public void testMaybeWriteStatusToDisk() {
-        JobInfo job = JobCreator.create(application, 0)
+        JobInfo job = JobCreator.create(application)
                                 .setRequiresCharging(true)
                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                                 .setBackoffCriteria(10000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
@@ -77,13 +77,13 @@ public class JobStoreTest {
 
     @Test
     public void testWritingTwoFilesToDisk() {
-        JobInfo job1 = JobCreator.create(application, 1)
+        JobInfo job1 = JobCreator.create(application)
                                  .setRequiresDeviceIdle(true)
                                  .setPeriodic(10000L)
                                  .setRequiresCharging(true)
                                  .setPersisted(true)
                                  .build();
-        JobInfo job2 = JobCreator.create(application, 2)
+        JobInfo job2 = JobCreator.create(application)
                                  .setMinimumLatency(5000L)
                                  .setBackoffCriteria(15000L, JobInfo.BACKOFF_POLICY_LINEAR)
                                  .setOverrideDeadline(30000L)
@@ -137,7 +137,7 @@ public class JobStoreTest {
     @Test
     public void testWritingTaskWithExtras() {
         JobInfo.Builder builder =
-                JobCreator.create(application, 8)
+                JobCreator.create(application)
                           .setRequiresDeviceIdle(true)
                           .setPeriodic(10000L)
                           .setRequiresCharging(true)
@@ -163,7 +163,7 @@ public class JobStoreTest {
 
     public void testWritingTaskWithFlex() {
         JobInfo.Builder builder =
-                JobCreator.create(application, 8)
+                JobCreator.create(application)
                           .setRequiresDeviceIdle(true)
                           .setPeriodic(TimeUnit.HOURS.toMillis(5), TimeUnit.HOURS.toMillis(1))
                           .setRequiresCharging(true)
@@ -183,7 +183,7 @@ public class JobStoreTest {
     @Test
     public void testMassivePeriodClampedOnRead() {
         long period = TimeUnit.HOURS.toMillis(2);
-        JobInfo job = JobCreator.create(application, 8).setPeriodic(period).setPersisted(true).build();
+        JobInfo job = JobCreator.create(application).setPeriodic(period).setPersisted(true).build();
 
         long invalidLateRuntimeElapsedMillis = SystemClock.elapsedRealtime() + (period) + period;  // > period.
         long invalidEarlyRuntimeElapsedMillis = invalidLateRuntimeElapsedMillis - period; // Early = (late - period).
@@ -210,7 +210,7 @@ public class JobStoreTest {
 
     @Test
     public void testSchedulerPersisted() {
-        JobInfo job = JobCreator.create(application, 92)
+        JobInfo job = JobCreator.create(application)
                                 .setOverrideDeadline(5000)
                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
                                 .setRequiresBatteryNotLow(true)
@@ -235,7 +235,7 @@ public class JobStoreTest {
         String authority = "com.doist";
 
         JobInfo.Builder builder =
-                JobCreator.create(application, 103)
+                JobCreator.create(application)
                           .addTriggerContentUri(new JobInfo.TriggerContentUri(uri, 0))
                           .setTriggerContentUpdateDelay(TimeUnit.SECONDS.toMillis(5))
                           .setTriggerContentMaxDelay(TimeUnit.SECONDS.toMillis(30));

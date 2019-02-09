@@ -60,50 +60,57 @@ public class JobSchedulerTest {
 
     @Test
     public void testSchedule() {
-        jobScheduler.schedule(JobCreator.create(application, 0).setRequiresCharging(true).build());
+        JobInfo job = JobCreator.create(application).setRequiresCharging(true).build();
+        jobScheduler.schedule(job);
 
-        assertJobSchedulerContains(0);
+        assertJobSchedulerContains(job.getId());
 
-        jobScheduler.schedule(JobCreator.create(application, 1).setRequiresCharging(true).build());
+        JobInfo job2 = JobCreator.create(application).setRequiresCharging(true).build();
+        jobScheduler.schedule(job2);
 
-        assertJobSchedulerContains(0, 1);
+        assertJobSchedulerContains(job.getId(), job2.getId());
 
-        jobScheduler.schedule(JobCreator.create(application, 0).setRequiresCharging(true).build());
+        jobScheduler.schedule(job);
 
-        assertJobSchedulerContains(0, 1);
+        assertJobSchedulerContains(job.getId(), job2.getId());
     }
 
     @Test(expected = IllegalStateException.class)
     public void testScheduleHasUpperLimit() {
         for (int i = 0; i <= JobScheduler.MAX_JOBS + 1; i++) {
             jobScheduler.schedule(
-                    JobCreator.create(application, i, 2000).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build());
+                    JobCreator.create(application, 2000).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build());
         }
     }
 
     @Test
     public void testCancel() {
-        jobScheduler.schedule(JobCreator.create(application, 0).setRequiresDeviceIdle(true).build());
-        jobScheduler.schedule(JobCreator.create(application, 1).setRequiresDeviceIdle(true).build());
+        JobInfo job = JobCreator.create(application).setRequiresDeviceIdle(true).build();
+        jobScheduler.schedule(job);
+        JobInfo job2 = JobCreator.create(application).setRequiresDeviceIdle(true).build();
+        jobScheduler.schedule(job2);
 
-        assertJobSchedulerContains(0, 1);
+        assertJobSchedulerContains(job.getId(), job2.getId());
 
-        jobScheduler.cancel(0);
+        jobScheduler.cancel(job.getId());
 
-        assertJobSchedulerContains(1);
+        assertJobSchedulerContains(job2.getId());
 
-        jobScheduler.cancel(1);
+        jobScheduler.cancel(job2.getId());
 
         assertJobSchedulerContains();
     }
 
     @Test
     public void testCancelAll() {
-        jobScheduler.schedule(JobCreator.create(application, 0).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
-        jobScheduler.schedule(JobCreator.create(application, 1).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
-        jobScheduler.schedule(JobCreator.create(application, 2).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
+        JobInfo job = JobCreator.create(application).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build();
+        jobScheduler.schedule(job);
+        JobInfo job2 = JobCreator.create(application).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build();
+        jobScheduler.schedule(job2);
+        JobInfo job3 = JobCreator.create(application).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build();
+        jobScheduler.schedule(job3);
 
-        assertJobSchedulerContains(0, 1, 2);
+        assertJobSchedulerContains(job.getId(), job2.getId(), job3.getId());
 
         jobScheduler.cancelAll();
 
@@ -112,25 +119,24 @@ public class JobSchedulerTest {
 
     @Test
     public void testJobFinishedSuccess() {
-        JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setRequiresCharging(true /* Random constraint. */).build(),
-                noopScheduler.getTag());
+        JobInfo job = JobCreator.create(application).setRequiresCharging(true).build();
+        JobStatus jobStatus = JobStatus.createFromJobInfo(job, noopScheduler.getTag());
         jobStore.add(jobStatus);
 
-        jobScheduler.onJobCompleted(0, false);
+        jobScheduler.onJobCompleted(job.getId(), false);
         assertJobSchedulerContains(/* Nothing. */);
     }
 
     @Test
     public void testPeriodicJobFinishedSuccess() {
         long timeMs = TimeUnit.MINUTES.toMillis(15);
-        JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setPeriodic(timeMs).build(), noopScheduler.getTag());
+        JobInfo job = JobCreator.create(application).setPeriodic(timeMs).build();
+        JobStatus jobStatus = JobStatus.createFromJobInfo(job, noopScheduler.getTag());
         jobStore.add(jobStatus);
         Robolectric.getForegroundThreadScheduler().advanceBy(timeMs, TimeUnit.MILLISECONDS);
 
-        jobScheduler.onJobCompleted(0, false);
-        JobStatus newJobStatus = jobScheduler.getJob(0);
+        jobScheduler.onJobCompleted(job.getId(), false);
+        JobStatus newJobStatus = jobScheduler.getJob(job.getId());
         assertEquals(jobStatus.getEarliestRunTimeElapsed() + timeMs, newJobStatus.getEarliestRunTimeElapsed());
         assertEquals(jobStatus.getLatestRunTimeElapsed() + timeMs, newJobStatus.getLatestRunTimeElapsed());
     }
@@ -141,21 +147,21 @@ public class JobSchedulerTest {
         long timeMs = TimeUnit.MINUTES.toMillis(15);
         long timeMaxMs = TimeUnit.HOURS.toMillis(5);
 
-        JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0)
-                          .setPeriodic(timeMs)
-                          .setBackoffCriteria(timeMs, JobInfo.BACKOFF_POLICY_LINEAR)
-                          .build(), noopScheduler.getTag());
+        JobInfo job = JobCreator.create(application)
+                                .setPeriodic(timeMs)
+                                .setBackoffCriteria(timeMs, JobInfo.BACKOFF_POLICY_LINEAR)
+                                .build();
+        JobStatus jobStatus = JobStatus.createFromJobInfo(job, noopScheduler.getTag());
         jobStore.add(jobStatus);
 
         // Fail until it reaches 5 hours.
         for (int i = 0; i < timeMaxMs / timeMs; i++) {
-            jobScheduler.onJobCompleted(0, true);
-            jobStatus = jobScheduler.getJob(0);
+            jobScheduler.onJobCompleted(job.getId(), true);
+            jobStatus = jobScheduler.getJob(job.getId());
             assertEquals(currentTimeMs + timeMs * (i + 1), jobStatus.getEarliestRunTimeElapsed());
         }
-        jobScheduler.onJobCompleted(0, true);
-        jobStatus = jobStore.getJob(0);
+        jobScheduler.onJobCompleted(job.getId(), true);
+        jobStatus = jobStore.getJob(job.getId());
         assertEquals(currentTimeMs + timeMaxMs, jobStatus.getEarliestRunTimeElapsed());
     }
 
@@ -165,47 +171,50 @@ public class JobSchedulerTest {
         long timeMs = TimeUnit.MINUTES.toMillis(15);
         long timeMaxMs = TimeUnit.HOURS.toMillis(5);
 
-        JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0)
-                          .setRequiresCharging(true /* Random constraint. */)
-                          .setBackoffCriteria(timeMs, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
-                          .build(), noopScheduler.getTag());
+        JobInfo job = JobCreator.create(application)
+                                .setRequiresCharging(true)
+                                .setBackoffCriteria(timeMs, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
+                                .build();
+        JobStatus jobStatus = JobStatus.createFromJobInfo(job, noopScheduler.getTag());
         jobStore.add(jobStatus);
 
         // Fail until we reach five hours.
         for (int i = 0; i < Math.sqrt(timeMaxMs) / Math.sqrt(timeMs); i++) {
-            jobScheduler.onJobCompleted(0, true);
-            jobStatus = jobScheduler.getJob(0);
+            jobScheduler.onJobCompleted(job.getId(), true);
+            jobStatus = jobScheduler.getJob(job.getId());
             assertEquals(currentTimeMs + timeMs * Math.pow(2, i), jobStatus.getEarliestRunTimeElapsed(), 1);
         }
-        jobScheduler.onJobCompleted(0, true);
-        jobStatus = jobScheduler.getJob(0);
+        jobScheduler.onJobCompleted(job.getId(), true);
+        jobStatus = jobScheduler.getJob(job.getId());
         assertEquals(currentTimeMs + timeMaxMs, jobStatus.getEarliestRunTimeElapsed(), 1);
     }
 
     @Test
     public void testJobsByScheduler() {
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 0).setRequiresCharging(true).build(), AlarmScheduler.TAG));
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 1).setRequiresDeviceIdle(true).build(), AlarmScheduler.TAG));
-        jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(application, 2).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), AlarmScheduler.TAG));
-        jobScheduler.schedule(JobCreator.create(application, 3).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
-        jobScheduler.schedule(JobCreator.create(application, 4).setRequiresCharging(true).build());
-        jobScheduler.schedule(JobCreator.create(application, 5).setRequiresDeviceIdle(true).build());
+        JobInfo job = JobCreator.create(application).setRequiresCharging(true).build();
+        jobStore.add(JobStatus.createFromJobInfo(job, AlarmScheduler.TAG));
+        JobInfo job2 = JobCreator.create(application).setRequiresDeviceIdle(true).build();
+        jobStore.add(JobStatus.createFromJobInfo(job2, AlarmScheduler.TAG));
+        JobInfo job3 = JobCreator.create(application).setPeriodic(TimeUnit.HOURS.toMillis(1)).build();
+        jobStore.add(JobStatus.createFromJobInfo(job3, AlarmScheduler.TAG));
+        JobInfo job4 = JobCreator.create(application).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build();
+        jobScheduler.schedule(job4);
+        JobInfo job5 = JobCreator.create(application).setRequiresCharging(true).build();
+        jobScheduler.schedule(job5);
+        JobInfo job6 = JobCreator.create(application).setRequiresDeviceIdle(true).build();
+        jobScheduler.schedule(job6);
 
-        assertJobSchedulerContains(0, 1, 2, 3, 4, 5);
+        assertJobSchedulerContains(job.getId(), job2.getId(), job3.getId(), job4.getId(), job5.getId(), job6.getId());
 
         assertThat(jobScheduler.getJobsByScheduler(AlarmScheduler.TAG), hasSize(3));
     }
 
     @Test
-    @Config(sdk = Build.VERSION_CODES.O, shadows = {ShadowGoogleApiAvailability.class})
+    @Config(sdk = {Build.VERSION_CODES.O, Build.VERSION_CODES.P}, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi26() {
-        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
@@ -223,9 +232,9 @@ public class JobSchedulerTest {
     @Test
     @Config(sdk = Build.VERSION_CODES.N, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi24() {
-        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
@@ -243,9 +252,9 @@ public class JobSchedulerTest {
     @Test
     @Config(sdk = Build.VERSION_CODES.LOLLIPOP, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi21() {
-        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
@@ -263,9 +272,9 @@ public class JobSchedulerTest {
     @Test
     @Config(sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi19() {
-        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 

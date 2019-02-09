@@ -25,7 +25,7 @@ public class JobInfo {
             NETWORK_TYPE_ANY,
             NETWORK_TYPE_UNMETERED,
             NETWORK_TYPE_NOT_ROAMING,
-            NETWORK_TYPE_METERED
+            NETWORK_TYPE_CELLULAR
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface NetworkType {
@@ -40,7 +40,14 @@ public class JobInfo {
     /** @see android.app.job.JobInfo#NETWORK_TYPE_NOT_ROAMING */
     public static final int NETWORK_TYPE_NOT_ROAMING = 3;
     /** @see android.app.job.JobInfo#NETWORK_TYPE_METERED */
-    public static final int NETWORK_TYPE_METERED = 4;
+    public static final int NETWORK_TYPE_CELLULAR = 4;
+
+    /** @see android.app.job.JobInfo#NETWORK_TYPE_METERED */
+    @Deprecated
+    public static final int NETWORK_TYPE_METERED = NETWORK_TYPE_CELLULAR;
+
+    /** @see android.app.job.JobInfo#NETWORK_BYTES_UNKNOWN */
+    public static final int NETWORK_BYTES_UNKNOWN = -1;
 
     /** @see android.app.job.JobInfo#DEFAULT_INITIAL_BACKOFF_MILLIS */
     public static final long DEFAULT_INITIAL_BACKOFF_MILLIS = 30000L;  // 30 seconds.

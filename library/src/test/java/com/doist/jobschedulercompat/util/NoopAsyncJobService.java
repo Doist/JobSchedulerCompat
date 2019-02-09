@@ -50,7 +50,7 @@ public class NoopAsyncJobService extends JobService {
         if (thread != null) {
             while (thread.isAlive()) {
                 try {
-                    Thread.sleep(1);
+                    Thread.sleep(5);
                 } catch (InterruptedException e) {
                     // Ignore.
                 }

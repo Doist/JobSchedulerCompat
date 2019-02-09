@@ -13,6 +13,4 @@ public class NoopJobService extends JobService {
     public boolean onStopJob(JobParameters params) {
         return false;
     }
-
-
 }
