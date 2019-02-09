@@ -1,8 +1,6 @@
 package com.doist.jobschedulercompat.util;
 
 import org.robolectric.Robolectric;
-import org.robolectric.shadows.ShadowConnectivityManager;
-import org.robolectric.shadows.ShadowPowerManager;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -43,20 +41,20 @@ public class DeviceTestUtils {
     }
 
     public static void setDeviceIdle(Context context, boolean idle) {
-        ShadowPowerManager manager = shadowOf((PowerManager) context.getSystemService(Context.POWER_SERVICE));
-        manager.setIsInteractive(!idle);
-        manager.setIsScreenOn(!idle);
+        PowerManager manager = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
+        shadowOf(manager).setIsInteractive(!idle);
+        shadowOf(manager).setIsScreenOn(!idle);
     }
 
+    @SuppressWarnings("deprecation")
     public static void setNetworkInfo(Context context, boolean isConnected, boolean isRoaming, boolean isWifi) {
-        ShadowConnectivityManager manager =
-                shadowOf((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
+        ConnectivityManager manager = (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo.DetailedState detailedState =
                 isConnected ? NetworkInfo.DetailedState.CONNECTED : NetworkInfo.DetailedState.DISCONNECTED;
         int type = isConnected ? (isWifi ? ConnectivityManager.TYPE_WIFI : ConnectivityManager.TYPE_MOBILE) : -1;
         NetworkInfo networkInfo =
                 ShadowNetworkInfo.newInstance(detailedState, type, 0, isConnected, isConnected, isRoaming);
-        manager.setActiveNetworkInfo(networkInfo);
+        shadowOf(manager).setActiveNetworkInfo(networkInfo);
     }
 
     @SuppressWarnings("deprecation")

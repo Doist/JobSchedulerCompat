@@ -3,31 +3,33 @@ package com.doist.jobschedulercompat.util;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
 
-import org.robolectric.shadows.ShadowApplication;
-
+import android.app.Application;
 import android.content.ComponentName;
-import android.content.Context;
+import android.os.IBinder;
+
+import static org.robolectric.Shadows.shadowOf;
 
 public class JobCreator {
-    public static JobInfo.Builder create(Context context, int id) {
-        return create(context, id, 0);
+    public static JobInfo.Builder create(Application application, int id) {
+        return create(application, id, 0);
     }
 
-    public static JobInfo.Builder create(Context context, int id, long delay) {
-        JobInfo.Builder builder;
+    public static JobInfo.Builder create(Application application, int id, long delay) {
+        ComponentName component;
+        PersistableBundle extras;
+        IBinder service;
         if (delay > 0) {
-            ComponentName component = new ComponentName(context, NoopAsyncJobService.class);
-            PersistableBundle extras = new PersistableBundle();
+            component = new ComponentName(application, NoopAsyncJobService.class);
+            extras = new PersistableBundle();
             extras.putLong(NoopAsyncJobService.EXTRA_DELAY, delay);
-            builder = new JobInfo.Builder(id, component).setExtras(extras);
-            ShadowApplication.getInstance().setComponentNameAndServiceForBindService(
-                    component, new NoopAsyncJobService().onBind(null));
+            service = new NoopAsyncJobService().onBind(null);
         } else {
-            ComponentName component = new ComponentName(context, NoopJobService.class);
-            builder = new JobInfo.Builder(id, component);
-            ShadowApplication.getInstance().setComponentNameAndServiceForBindService(
-                    component, new NoopJobService().onBind(null));
+            component = new ComponentName(application, NoopJobService.class);
+            extras = PersistableBundle.EMPTY;
+            service = new NoopJobService().onBind(null);
         }
+        JobInfo.Builder builder = new JobInfo.Builder(id, component).setExtras(extras);
+        shadowOf(application).setComponentNameAndServiceForBindService(component, service);
         return builder;
     }
 

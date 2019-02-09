@@ -14,6 +14,7 @@ import androidx.annotation.RestrictTo;
 
 import static android.content.Context.CONNECTIVITY_SERVICE;
 
+@SuppressWarnings("deprecation")
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public class DeviceUtils {
     public static boolean isCharging(Context context) {

@@ -1,6 +1,5 @@
 package com.doist.jobschedulercompat.job;
 
-import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.util.NoopJobService;
 
@@ -8,8 +7,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
-import org.robolectric.annotation.Config;
 
 import android.content.ComponentName;
 import android.net.Uri;
@@ -17,18 +14,19 @@ import android.os.SystemClock;
 
 import java.util.concurrent.TimeUnit;
 
+import androidx.test.core.app.ApplicationProvider;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class)
 public class JobStatusTest {
     private ComponentName component;
 
     @Before
     public void setup() {
-        component = new ComponentName(RuntimeEnvironment.application, NoopJobService.class);
+        component = new ComponentName(ApplicationProvider.getApplicationContext(), NoopJobService.class);
     }
 
     @Test

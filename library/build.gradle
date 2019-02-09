@@ -1,13 +1,5 @@
 apply plugin: 'com.android.library'
 
-ext.versions = [
-        androidx:               "1.0.0",
-        play_services:          "15.0.1",
-        junit:                  "4.12",
-        robolectric:            "3.6.1",
-        shadows_play_services:  "3.3.2"
-]
-
 repositories {
     google()
     jcenter()
@@ -15,28 +7,36 @@ repositories {
 
 android {
     compileSdkVersion 28
-    buildToolsVersion "28.0.3"
+    buildToolsVersion '28.0.3'
 
     defaultConfig {
         minSdkVersion 16
         targetSdkVersion 28
 
         versionCode 1
-        versionName "1.0"
+        versionName '1.0'
     }
 
     buildTypes {
+        debug {
+            testCoverageEnabled true
+        }
         release {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    testOptions.unitTests.includeAndroidResources = true
 }
 
 dependencies {
-    implementation "androidx.annotation:annotation:$versions.androidx"
-    compileOnly "com.google.android.gms:play-services-gcm:$versions.play_services"
-    testImplementation "junit:junit:$versions.junit"
-    testImplementation "org.robolectric:robolectric:$versions.robolectric"
-    testImplementation "org.robolectric:shadows-play-services:$versions.shadows_play_services"
-    testImplementation "com.google.android.gms:play-services-gcm:$versions.play_services"
+    implementation 'androidx.annotation:annotation:1.0.1'
+    compileOnly 'com.google.android.gms:play-services-gcm:16.0.0'
+    
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'androidx.test:runner:1.1.1'
+    testImplementation 'androidx.test.ext:junit:1.1.0'
+    testImplementation 'org.robolectric:robolectric:4.1'
+    testImplementation 'org.robolectric:shadows-playservices:4.1'
+    testImplementation 'com.google.android.gms:play-services-gcm:16.0.0'
 }

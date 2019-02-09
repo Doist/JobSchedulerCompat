@@ -116,13 +116,11 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
         Bundle extras = parser.getExtras();
         Uri[] triggeredUris = null;
         if (parser.getTriggeredContentUris() != null) {
-            triggeredUris = new Uri[parser.getTriggeredContentUris().size()];
-            parser.getTriggeredContentUris().toArray(triggeredUris);
+            triggeredUris = parser.getTriggeredContentUris().toArray(new Uri[0]);
         }
         String[] triggeredAuthorities = null;
         if (parser.getTriggeredContentAuthorities() != null) {
-            triggeredAuthorities = new String[parser.getTriggeredContentAuthorities().size()];
-            parser.getTriggeredContentAuthorities().toArray(triggeredAuthorities);
+            triggeredAuthorities = parser.getTriggeredContentAuthorities().toArray(new String[0]);
         }
         IBinder callback = parser.getCallback();
 

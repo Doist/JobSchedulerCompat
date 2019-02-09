@@ -3,7 +3,6 @@ package com.doist.jobschedulercompat.scheduler.gcm;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.gcm.PendingCallback;
 
-import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.job.JobStore;
@@ -20,10 +19,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowApplication;
 
+import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -36,13 +34,16 @@ import android.os.Parcel;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import androidx.test.core.app.ApplicationProvider;
+
 import static org.junit.Assert.assertEquals;
+import static org.robolectric.Shadows.shadowOf;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
+@Config(sdk = Build.VERSION_CODES.KITKAT,
         shadows = {ShadowGoogleApiAvailability.class, ShadowNetworkInfo.class, ShadowParcel.class})
 public class GcmJobServiceTest {
-    private Context context;
+    private Application application;
     private JobStore jobStore;
     private GcmJobService service;
 
@@ -53,8 +54,8 @@ public class GcmJobServiceTest {
 
     @Before
     public void setup() {
-        context = RuntimeEnvironment.application;
-        jobStore = JobStore.get(context);
+        application = ApplicationProvider.getApplicationContext();
+        jobStore = JobStore.get(application);
         service = Robolectric.buildService(GcmJobService.class).create().get();
     }
 
@@ -67,14 +68,14 @@ public class GcmJobServiceTest {
     @Test
     public void testInitializeSendsBroadcastsSchedules() {
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 1).setRequiresCharging(true).build(), GcmScheduler.TAG));
+                JobCreator.create(application, 1).setRequiresCharging(true).build(), GcmScheduler.TAG));
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 2).setRequiresDeviceIdle(true).build(), GcmScheduler.TAG));
+                JobCreator.create(application, 2).setRequiresDeviceIdle(true).build(), GcmScheduler.TAG));
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 3).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), GcmScheduler.TAG));
+                JobCreator.create(application, 3).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), GcmScheduler.TAG));
 
         final AtomicInteger idSum = new AtomicInteger(0);
-        context.registerReceiver(new BroadcastReceiver() {
+        application.registerReceiver(new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (GcmScheduler.ACTION_SCHEDULE.equals(intent.getAction())
@@ -95,9 +96,9 @@ public class GcmJobServiceTest {
     @Test
     public void testJobRuns() {
         long delayMs = 5000;
-        DeviceTestUtils.setNetworkInfo(context, true, false, true);
+        DeviceTestUtils.setNetworkInfo(application, true, false, true);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
+                JobCreator.create(application, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build(),
                 GcmScheduler.TAG));
         executeService(0);
 
@@ -105,11 +106,11 @@ public class GcmJobServiceTest {
     }
 
     @Test
-    public void testJobFinishes() throws InterruptedException {
+    public void testJobFinishes() {
         long delayMs = 5;
-        DeviceTestUtils.setNetworkInfo(context, true, false, false);
+        DeviceTestUtils.setNetworkInfo(application, true, false, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED).build(),
+                JobCreator.create(application, 0, delayMs).setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED).build(),
                 GcmScheduler.TAG));
         executeService(0);
 
@@ -123,9 +124,9 @@ public class GcmJobServiceTest {
     @Test
     public void testDeadlineConstraint() {
         long latency = TimeUnit.HOURS.toMillis(2);
-        DeviceTestUtils.setCharging(context, false);
+        DeviceTestUtils.setCharging(application, false);
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresCharging(true).setOverrideDeadline(latency).build(),
+                JobCreator.create(application, 0).setRequiresCharging(true).setOverrideDeadline(latency).build(),
                 GcmScheduler.TAG));
 
         assertEquals(1, jobStore.size());
@@ -137,7 +138,7 @@ public class GcmJobServiceTest {
     }
 
     private void assertBoundServiceCount(int count) {
-        assertEquals(count, ShadowApplication.getInstance().getBoundServiceConnections().size());
+        assertEquals(count, shadowOf(application).getBoundServiceConnections().size());
     }
 
     private void initializeService() {

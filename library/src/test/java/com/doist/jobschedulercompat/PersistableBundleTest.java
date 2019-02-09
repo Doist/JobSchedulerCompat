@@ -19,7 +19,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class)
 public class PersistableBundleTest {
     @Test
     public void testCopyConstructor() {
@@ -111,7 +110,7 @@ public class PersistableBundleTest {
     }
 
     @Test
-    @Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.LOLLIPOP_MR1)
+    @Config(sdk = Build.VERSION_CODES.LOLLIPOP_MR1)
     public void testPersistableBundleBooleansOnLollipop() {
         testPersistableBundleBooleans();
     }

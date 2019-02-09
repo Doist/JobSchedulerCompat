@@ -15,7 +15,8 @@ public class ShadowNetworkInfo extends org.robolectric.shadows.ShadowNetworkInfo
             NetworkInfo.DetailedState detailedState, int type, int subType, boolean isAvailable, boolean isConnected,
             boolean isRoaming) {
         NetworkInfo networkInfo = org.robolectric.shadows.ShadowNetworkInfo.newInstance(
-                detailedState, type, subType, isAvailable, isConnected);
+                detailedState, type, subType, isAvailable,
+                isConnected ? NetworkInfo.State.CONNECTED : NetworkInfo.State.DISCONNECTED);
         ShadowNetworkInfo info = (ShadowNetworkInfo) shadowOf(networkInfo);
         info.setRoaming(isRoaming);
         return networkInfo;

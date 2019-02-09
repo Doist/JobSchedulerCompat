@@ -1,6 +1,5 @@
 package com.doist.jobschedulercompat.scheduler.jobscheduler;
 
-import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.job.JobStatus;
 import com.doist.jobschedulercompat.job.JobStore;
 import com.doist.jobschedulercompat.util.DeviceTestUtils;
@@ -14,32 +13,32 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowApplication;
 
-import android.content.Context;
+import android.app.Application;
 import android.os.Build;
 
 import java.util.concurrent.TimeUnit;
 
+import androidx.test.core.app.ApplicationProvider;
+
 import static org.junit.Assert.assertEquals;
+import static org.robolectric.Shadows.shadowOf;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class,
-        sdk = {Build.VERSION_CODES.LOLLIPOP, Build.VERSION_CODES.N, Build.VERSION_CODES.O},
-        shadows = {ShadowJobParameters.class, ShadowNetworkInfo.class})
+@Config(sdk = {Build.VERSION_CODES.LOLLIPOP, Build.VERSION_CODES.N, Build.VERSION_CODES.O, Build.VERSION_CODES.P},
+       shadows = {ShadowJobParameters.class, ShadowNetworkInfo.class})
 public class JobSchedulerJobServiceTest {
     private static final long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
 
-    private Context context;
+    private Application application;
     private JobStore jobStore;
     private JobSchedulerJobService service;
 
     @Before
     public void setup() {
-        context = RuntimeEnvironment.application;
-        jobStore = JobStore.get(context);
+        application = ApplicationProvider.getApplicationContext();
+        jobStore = JobStore.get(application);
         service = Robolectric.buildService(JobSchedulerJobService.class).create().bind().get();
     }
 
@@ -53,7 +52,7 @@ public class JobSchedulerJobServiceTest {
     public void testJobRuns() {
         long delayMs = 5000;
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
+                JobCreator.create(application, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
                 JobSchedulerSchedulerV26.TAG));
         DeviceTestUtils.advanceTime(LATENCY_MS);
         executeService(0);
@@ -62,10 +61,10 @@ public class JobSchedulerJobServiceTest {
     }
 
     @Test
-    public void testJobFinishes() throws InterruptedException {
+    public void testJobFinishes() {
         long delayMs = 5;
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
+                JobCreator.create(application, 0, delayMs).setMinimumLatency(LATENCY_MS).build(),
                 JobSchedulerSchedulerV26.TAG));
         DeviceTestUtils.advanceTime(LATENCY_MS);
         executeService(0);
@@ -79,10 +78,10 @@ public class JobSchedulerJobServiceTest {
 
     @Test
     public void testStopJobStopsJob() {
-        DeviceTestUtils.setCharging(context, true);
+        DeviceTestUtils.setCharging(application, true);
         long delayMs = 5000;
         JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0, delayMs).setRequiresCharging(true).build(),
+                JobCreator.create(application, 0, delayMs).setRequiresCharging(true).build(),
                 JobSchedulerSchedulerV26.TAG);
         jobStore.add(jobStatus);
         executeService(0);
@@ -99,6 +98,6 @@ public class JobSchedulerJobServiceTest {
     }
 
     private void assertBoundServiceCount(int count) {
-        assertEquals(count, ShadowApplication.getInstance().getBoundServiceConnections().size());
+        assertEquals(count, shadowOf(application).getBoundServiceConnections().size());
     }
 }

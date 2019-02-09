@@ -20,14 +20,15 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
-import android.content.Context;
+import android.app.Application;
 import android.os.Build;
 import android.os.SystemClock;
 
 import java.util.concurrent.TimeUnit;
+
+import androidx.test.core.app.ApplicationProvider;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
@@ -36,20 +37,19 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class)
 public class JobSchedulerTest {
-    private Context context;
+    private Application application;
     private JobScheduler jobScheduler;
     private JobStore jobStore;
     private Scheduler noopScheduler;
 
     @Before
     public void setup() {
-        context = RuntimeEnvironment.application;
-        jobScheduler = JobScheduler.get(context);
-        jobStore = JobStore.get(context);
+        application = ApplicationProvider.getApplicationContext();
+        jobScheduler = JobScheduler.get(application);
+        jobStore = JobStore.get(application);
 
-        noopScheduler = new NoopScheduler(context);
+        noopScheduler = new NoopScheduler(application);
         jobScheduler.schedulers.put(noopScheduler.getTag(), noopScheduler);
     }
 
@@ -60,15 +60,15 @@ public class JobSchedulerTest {
 
     @Test
     public void testSchedule() {
-        jobScheduler.schedule(JobCreator.create(context, 0).setRequiresCharging(true).build());
+        jobScheduler.schedule(JobCreator.create(application, 0).setRequiresCharging(true).build());
 
         assertJobSchedulerContains(0);
 
-        jobScheduler.schedule(JobCreator.create(context, 1).setRequiresCharging(true).build());
+        jobScheduler.schedule(JobCreator.create(application, 1).setRequiresCharging(true).build());
 
         assertJobSchedulerContains(0, 1);
 
-        jobScheduler.schedule(JobCreator.create(context, 0).setRequiresCharging(true).build());
+        jobScheduler.schedule(JobCreator.create(application, 0).setRequiresCharging(true).build());
 
         assertJobSchedulerContains(0, 1);
     }
@@ -77,14 +77,14 @@ public class JobSchedulerTest {
     public void testScheduleHasUpperLimit() {
         for (int i = 0; i <= JobScheduler.MAX_JOBS + 1; i++) {
             jobScheduler.schedule(
-                    JobCreator.create(context, i, 2000).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build());
+                    JobCreator.create(application, i, 2000).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).build());
         }
     }
 
     @Test
     public void testCancel() {
-        jobScheduler.schedule(JobCreator.create(context, 0).setRequiresDeviceIdle(true).build());
-        jobScheduler.schedule(JobCreator.create(context, 1).setRequiresDeviceIdle(true).build());
+        jobScheduler.schedule(JobCreator.create(application, 0).setRequiresDeviceIdle(true).build());
+        jobScheduler.schedule(JobCreator.create(application, 1).setRequiresDeviceIdle(true).build());
 
         assertJobSchedulerContains(0, 1);
 
@@ -99,9 +99,9 @@ public class JobSchedulerTest {
 
     @Test
     public void testCancelAll() {
-        jobScheduler.schedule(JobCreator.create(context, 0).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
-        jobScheduler.schedule(JobCreator.create(context, 1).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
-        jobScheduler.schedule(JobCreator.create(context, 2).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
+        jobScheduler.schedule(JobCreator.create(application, 0).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
+        jobScheduler.schedule(JobCreator.create(application, 1).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
+        jobScheduler.schedule(JobCreator.create(application, 2).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
 
         assertJobSchedulerContains(0, 1, 2);
 
@@ -113,7 +113,7 @@ public class JobSchedulerTest {
     @Test
     public void testJobFinishedSuccess() {
         JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresCharging(true /* Random constraint. */).build(),
+                JobCreator.create(application, 0).setRequiresCharging(true /* Random constraint. */).build(),
                 noopScheduler.getTag());
         jobStore.add(jobStatus);
 
@@ -125,7 +125,7 @@ public class JobSchedulerTest {
     public void testPeriodicJobFinishedSuccess() {
         long timeMs = TimeUnit.MINUTES.toMillis(15);
         JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setPeriodic(timeMs).build(), noopScheduler.getTag());
+                JobCreator.create(application, 0).setPeriodic(timeMs).build(), noopScheduler.getTag());
         jobStore.add(jobStatus);
         Robolectric.getForegroundThreadScheduler().advanceBy(timeMs, TimeUnit.MILLISECONDS);
 
@@ -142,7 +142,7 @@ public class JobSchedulerTest {
         long timeMaxMs = TimeUnit.HOURS.toMillis(5);
 
         JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0)
+                JobCreator.create(application, 0)
                           .setPeriodic(timeMs)
                           .setBackoffCriteria(timeMs, JobInfo.BACKOFF_POLICY_LINEAR)
                           .build(), noopScheduler.getTag());
@@ -166,7 +166,7 @@ public class JobSchedulerTest {
         long timeMaxMs = TimeUnit.HOURS.toMillis(5);
 
         JobStatus jobStatus = JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0)
+                JobCreator.create(application, 0)
                           .setRequiresCharging(true /* Random constraint. */)
                           .setBackoffCriteria(timeMs, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
                           .build(), noopScheduler.getTag());
@@ -186,14 +186,14 @@ public class JobSchedulerTest {
     @Test
     public void testJobsByScheduler() {
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 0).setRequiresCharging(true).build(), AlarmScheduler.TAG));
+                JobCreator.create(application, 0).setRequiresCharging(true).build(), AlarmScheduler.TAG));
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 1).setRequiresDeviceIdle(true).build(), AlarmScheduler.TAG));
+                JobCreator.create(application, 1).setRequiresDeviceIdle(true).build(), AlarmScheduler.TAG));
         jobStore.add(JobStatus.createFromJobInfo(
-                JobCreator.create(context, 2).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), AlarmScheduler.TAG));
-        jobScheduler.schedule(JobCreator.create(context, 3).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
-        jobScheduler.schedule(JobCreator.create(context, 4).setRequiresCharging(true).build());
-        jobScheduler.schedule(JobCreator.create(context, 5).setRequiresDeviceIdle(true).build());
+                JobCreator.create(application, 2).setPeriodic(TimeUnit.HOURS.toMillis(1)).build(), AlarmScheduler.TAG));
+        jobScheduler.schedule(JobCreator.create(application, 3).setMinimumLatency(TimeUnit.HOURS.toMillis(1)).build());
+        jobScheduler.schedule(JobCreator.create(application, 4).setRequiresCharging(true).build());
+        jobScheduler.schedule(JobCreator.create(application, 5).setRequiresDeviceIdle(true).build());
 
         assertJobSchedulerContains(0, 1, 2, 3, 4, 5);
 
@@ -203,100 +203,100 @@ public class JobSchedulerTest {
     @Test
     @Config(sdk = Build.VERSION_CODES.O, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi26() {
-        JobInfo api21Job = JobCreator.create(context, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(context, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(context, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(JobSchedulerSchedulerV26.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(JobSchedulerSchedulerV26.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(JobSchedulerSchedulerV26.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(JobSchedulerSchedulerV26.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(JobSchedulerSchedulerV26.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(JobSchedulerSchedulerV26.class));
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SUCCESS);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(JobSchedulerSchedulerV26.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(JobSchedulerSchedulerV26.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(JobSchedulerSchedulerV26.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(JobSchedulerSchedulerV26.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(JobSchedulerSchedulerV26.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(JobSchedulerSchedulerV26.class));
     }
 
     @Test
     @Config(sdk = Build.VERSION_CODES.N, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi24() {
-        JobInfo api21Job = JobCreator.create(context, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(context, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(context, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(JobSchedulerSchedulerV24.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(JobSchedulerSchedulerV24.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(JobSchedulerSchedulerV24.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(JobSchedulerSchedulerV24.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(AlarmScheduler.class));
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SUCCESS);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(JobSchedulerSchedulerV24.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(JobSchedulerSchedulerV24.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(JobSchedulerSchedulerV24.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(JobSchedulerSchedulerV24.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(AlarmScheduler.class));
     }
 
     @Test
     @Config(sdk = Build.VERSION_CODES.LOLLIPOP, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi21() {
-        JobInfo api21Job = JobCreator.create(context, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(context, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(context, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(JobSchedulerSchedulerV21.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(AlarmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(JobSchedulerSchedulerV21.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(AlarmScheduler.class));
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SUCCESS);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(JobSchedulerSchedulerV21.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(GcmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(JobSchedulerSchedulerV21.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(GcmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(AlarmScheduler.class));
     }
 
     @Test
     @Config(sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowGoogleApiAvailability.class})
     public void testSchedulerInApi19() {
-        JobInfo api21Job = JobCreator.create(context, 0).setRequiresCharging(true).build();
-        JobInfo api24Job = JobCreator.create(context, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
-        JobInfo api26Job = JobCreator.create(context, 1).setRequiresBatteryNotLow(true).build();
+        JobInfo api21Job = JobCreator.create(application, 0).setRequiresCharging(true).build();
+        JobInfo api24Job = JobCreator.create(application, 3).setPeriodic(15 * 60 * 1000L, 5 * 60 * 1000L).build();
+        JobInfo api26Job = JobCreator.create(application, 1).setRequiresBatteryNotLow(true).build();
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SERVICE_MISSING);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(AlarmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(AlarmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(AlarmScheduler.class));
 
         ShadowGoogleApiAvailability.setIsGooglePlayServicesAvailable(ConnectionResult.SUCCESS);
 
-        assertThat(jobScheduler.getSchedulerForJob(context, api21Job), instanceOf(GcmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api24Job), instanceOf(GcmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForJob(context, api26Job), instanceOf(AlarmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api21Job), instanceOf(GcmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api24Job), instanceOf(GcmScheduler.class));
+        assertThat(jobScheduler.getSchedulerForJob(application, api26Job), instanceOf(AlarmScheduler.class));
     }
 
     @Test
     public void testSchedulerForTag() {
-        assertThat(jobScheduler.getSchedulerForTag(context, JobSchedulerSchedulerV26.TAG),
+        assertThat(jobScheduler.getSchedulerForTag(application, JobSchedulerSchedulerV26.TAG),
                    instanceOf(JobSchedulerSchedulerV26.class));
-        assertThat(jobScheduler.getSchedulerForTag(context, JobSchedulerSchedulerV24.TAG),
+        assertThat(jobScheduler.getSchedulerForTag(application, JobSchedulerSchedulerV24.TAG),
                    instanceOf(JobSchedulerSchedulerV24.class));
-        assertThat(jobScheduler.getSchedulerForTag(context, JobSchedulerSchedulerV21.TAG),
+        assertThat(jobScheduler.getSchedulerForTag(application, JobSchedulerSchedulerV21.TAG),
                    instanceOf(JobSchedulerSchedulerV21.class));
-        assertThat(jobScheduler.getSchedulerForTag(context, GcmScheduler.TAG),
+        assertThat(jobScheduler.getSchedulerForTag(application, GcmScheduler.TAG),
                    instanceOf(GcmScheduler.class));
-        assertThat(jobScheduler.getSchedulerForTag(context, AlarmScheduler.TAG),
+        assertThat(jobScheduler.getSchedulerForTag(application, AlarmScheduler.TAG),
                    instanceOf(AlarmScheduler.class));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testSchedulerForUnknownTagShouldFail() {
-        jobScheduler.getSchedulerForTag(context, "unknown");
+        jobScheduler.getSchedulerForTag(application, "unknown");
     }
 
     private void assertJobSchedulerContains(int... ids) {

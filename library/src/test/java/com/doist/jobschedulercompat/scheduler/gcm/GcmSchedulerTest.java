@@ -2,7 +2,6 @@ package com.doist.jobschedulercompat.scheduler.gcm;
 
 import com.google.android.gms.common.ConnectionResult;
 
-import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
 import com.doist.jobschedulercompat.util.JobCreator;
@@ -13,13 +12,11 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowApplication;
 
+import android.app.Application;
 import android.app.PendingIntent;
 import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -28,6 +25,8 @@ import android.os.Bundle;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import androidx.test.core.app.ApplicationProvider;
+
 import static com.doist.jobschedulercompat.scheduler.gcm.GcmScheduler.PARAM_REQUIRES_CHARGING;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertArrayEquals;
@@ -35,12 +34,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.robolectric.Shadows.shadowOf;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, sdk = Build.VERSION_CODES.KITKAT,
-        shadows = {ShadowGoogleApiAvailability.class})
+@Config(sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowGoogleApiAvailability.class})
 public class GcmSchedulerTest {
-    private Context context;
+    private Application application;
     private GcmScheduler scheduler;
 
     @BeforeClass
@@ -50,13 +49,13 @@ public class GcmSchedulerTest {
 
     @Before
     public void setup() {
-        context = RuntimeEnvironment.application;
-        scheduler = new GcmScheduler(context);
+        application = ApplicationProvider.getApplicationContext();
+        scheduler = new GcmScheduler(application);
     }
 
     @Test
     public void testScheduleBroadcasts() {
-        JobInfo job = JobCreator.create(context, 0)
+        JobInfo job = JobCreator.create(application, 0)
                                 .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
                                 .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
@@ -70,7 +69,7 @@ public class GcmSchedulerTest {
 
         PersistableBundle extras = new PersistableBundle();
         extras.putString("test", "test");
-        job = JobCreator.create(context, 1)
+        job = JobCreator.create(application, 1)
                         .setExtras(extras)
                         .setPeriodic(TimeUnit.MINUTES.toMillis(30))
                         .setRequiresCharging(true)
@@ -83,7 +82,7 @@ public class GcmSchedulerTest {
         assertNotNull(intent);
         assertIntentMatchesJobInfo(intent, job);
 
-        job = JobCreator.create(context, 2)
+        job = JobCreator.create(application, 2)
                         .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("doist.com"), 0))
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(
@@ -213,7 +212,7 @@ public class GcmSchedulerTest {
     }
 
     private Intent getLastBroadcastIntent() {
-        List<Intent> broadcastIntents = ShadowApplication.getInstance().getBroadcastIntents();
+        List<Intent> broadcastIntents = shadowOf(application).getBroadcastIntents();
         int count = broadcastIntents.size();
         if (count > 0) {
             return broadcastIntents.get(count - 1);

@@ -6,8 +6,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
-import org.robolectric.annotation.Config;
 
 import android.content.ComponentName;
 import android.net.Uri;
@@ -15,17 +13,18 @@ import android.os.Bundle;
 
 import java.util.concurrent.TimeUnit;
 
+import androidx.test.core.app.ApplicationProvider;
+
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertThat;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class)
 public class JobInfoTest {
     private ComponentName component;
 
     @Before
     public void setup() {
-        component = new ComponentName(RuntimeEnvironment.application, NoopJobService.class);
+        component = new ComponentName(ApplicationProvider.getApplicationContext(), NoopJobService.class);
     }
 
     @Test

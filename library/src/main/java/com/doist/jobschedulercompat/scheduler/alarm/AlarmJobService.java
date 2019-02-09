@@ -261,9 +261,9 @@ public class AlarmJobService extends Service implements JobService.Binder.Callba
         JobParameters params = new JobParameters(
                 jobId, job.getExtras(), job.getTransientExtras(), jobStatus.isDeadlineSatisfied(),
                 jobStatus.changedUris != null ?
-                jobStatus.changedUris.toArray(new Uri[jobStatus.changedUris.size()]) : null,
+                jobStatus.changedUris.toArray(new Uri[0]) : null,
                 jobStatus.changedAuthorities != null ?
-                jobStatus.changedAuthorities.toArray(new String[jobStatus.changedAuthorities.size()]) : null);
+                jobStatus.changedAuthorities.toArray(new String[0]) : null);
         Connection connection = new Connection(jobId, startId, params);
         Intent jobIntent = new Intent();
         ComponentName service = jobStatus.getServiceComponent();

@@ -544,7 +544,7 @@ public class JobInfo {
             JobInfo job = new JobInfo(
                     jobId, extras, transientExtras, jobService, constraintFlags,
                     triggerContentUris != null ?
-                    triggerContentUris.toArray(new TriggerContentUri[triggerContentUris.size()]) : null,
+                    triggerContentUris.toArray(new TriggerContentUri[0]) : null,
                     triggerContentUpdateDelay, triggerContentMaxDelay, hasEarlyConstraint, hasLateConstraint,
                     networkType, minLatencyMillis, maxExecutionDelayMillis, isPeriodic, isPersisted,
                     intervalMillis, flexMillis, initialBackoffMillis, backoffPolicy);

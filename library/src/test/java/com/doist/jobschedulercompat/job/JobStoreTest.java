@@ -1,6 +1,5 @@
 package com.doist.jobschedulercompat.job;
 
-import com.doist.jobschedulercompat.BuildConfig;
 import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
 import com.doist.jobschedulercompat.util.BundleUtils;
@@ -11,10 +10,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
-import org.robolectric.annotation.Config;
 
-import android.content.Context;
+import android.app.Application;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -23,21 +20,21 @@ import java.util.Iterator;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import androidx.test.core.app.ApplicationProvider;
 import edu.emory.mathcs.backport.java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class)
 public class JobStoreTest {
-    private Context context;
+    private Application application;
     private JobStore jobStore;
 
     @Before
     public void setup() {
-        context = RuntimeEnvironment.application;
-        jobStore = JobStore.get(context);
+        application = ApplicationProvider.getApplicationContext();
+        jobStore = JobStore.get(application);
     }
 
     @After
@@ -46,8 +43,8 @@ public class JobStoreTest {
     }
 
     @Test
-    public void testMaybeWriteStatusToDisk() throws InterruptedException {
-        JobInfo job = JobCreator.create(context, 0)
+    public void testMaybeWriteStatusToDisk() {
+        JobInfo job = JobCreator.create(application, 0)
                                 .setRequiresCharging(true)
                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                                 .setBackoffCriteria(10000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
@@ -79,14 +76,14 @@ public class JobStoreTest {
     }
 
     @Test
-    public void testWritingTwoFilesToDisk() throws Exception {
-        JobInfo job1 = JobCreator.create(context, 1)
+    public void testWritingTwoFilesToDisk() {
+        JobInfo job1 = JobCreator.create(application, 1)
                                  .setRequiresDeviceIdle(true)
                                  .setPeriodic(10000L)
                                  .setRequiresCharging(true)
                                  .setPersisted(true)
                                  .build();
-        JobInfo job2 = JobCreator.create(context, 2)
+        JobInfo job2 = JobCreator.create(application, 2)
                                  .setMinimumLatency(5000L)
                                  .setBackoffCriteria(15000L, JobInfo.BACKOFF_POLICY_LINEAR)
                                  .setOverrideDeadline(30000L)
@@ -138,9 +135,9 @@ public class JobStoreTest {
     }
 
     @Test
-    public void testWritingTaskWithExtras() throws Exception {
+    public void testWritingTaskWithExtras() {
         JobInfo.Builder builder =
-                JobCreator.create(context, 8)
+                JobCreator.create(application, 8)
                           .setRequiresDeviceIdle(true)
                           .setPeriodic(10000L)
                           .setRequiresCharging(true)
@@ -164,9 +161,9 @@ public class JobStoreTest {
         assertJobInfoEquals(job, loaded.getJob());
     }
 
-    public void testWritingTaskWithFlex() throws Exception {
+    public void testWritingTaskWithFlex() {
         JobInfo.Builder builder =
-                JobCreator.create(context, 8)
+                JobCreator.create(application, 8)
                           .setRequiresDeviceIdle(true)
                           .setPeriodic(TimeUnit.HOURS.toMillis(5), TimeUnit.HOURS.toMillis(1))
                           .setRequiresCharging(true)
@@ -184,9 +181,9 @@ public class JobStoreTest {
     }
 
     @Test
-    public void testMassivePeriodClampedOnRead() throws Exception {
+    public void testMassivePeriodClampedOnRead() {
         long period = TimeUnit.HOURS.toMillis(2);
-        JobInfo job = JobCreator.create(context, 8).setPeriodic(period).setPersisted(true).build();
+        JobInfo job = JobCreator.create(application, 8).setPeriodic(period).setPersisted(true).build();
 
         long invalidLateRuntimeElapsedMillis = SystemClock.elapsedRealtime() + (period) + period;  // > period.
         long invalidEarlyRuntimeElapsedMillis = invalidLateRuntimeElapsedMillis - period; // Early = (late - period).
@@ -213,7 +210,7 @@ public class JobStoreTest {
 
     @Test
     public void testSchedulerPersisted() {
-        JobInfo job = JobCreator.create(context, 92)
+        JobInfo job = JobCreator.create(application, 92)
                                 .setOverrideDeadline(5000)
                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_NOT_ROAMING)
                                 .setRequiresBatteryNotLow(true)
@@ -238,7 +235,7 @@ public class JobStoreTest {
         String authority = "com.doist";
 
         JobInfo.Builder builder =
-                JobCreator.create(context, 103)
+                JobCreator.create(application, 103)
                           .addTriggerContentUri(new JobInfo.TriggerContentUri(uri, 0))
                           .setTriggerContentUpdateDelay(TimeUnit.SECONDS.toMillis(5))
                           .setTriggerContentMaxDelay(TimeUnit.SECONDS.toMillis(30));
