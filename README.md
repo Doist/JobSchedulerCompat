@@ -1,5 +1,5 @@
 
-JobSchedulerCompat
+JobSchedulerCompat [![Build Status](https://dev.azure.com/doist/JobSchedulerCompat/_apis/build/status/Doist.JobSchedulerCompat?branchName=master)](https://dev.azure.com/doist/JobSchedulerCompat/_build/latest?definitionId=2&branchName=master)
 ==================
 
 JobSchedulerCompat is a backport of [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) for API 16 and above.
