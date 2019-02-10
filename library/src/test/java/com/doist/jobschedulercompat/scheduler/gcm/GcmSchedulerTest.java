@@ -87,7 +87,7 @@ public class GcmSchedulerTest {
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("doist.com"), 0))
                         .addTriggerContentUri(new JobInfo.TriggerContentUri(
                                 Uri.parse("todoist.com"), JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
-                        .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("twistapp.com"), 0))
+                        .addTriggerContentUri(new JobInfo.TriggerContentUri(Uri.parse("twist.com"), 0))
                         .build();
         scheduler.schedule(job);
 
@@ -182,7 +182,7 @@ public class GcmSchedulerTest {
         }
 
         assertEquals(job.isRequireCharging(), intent.getBooleanExtra(PARAM_REQUIRES_CHARGING, false));
-        int requiredNetwork = GcmScheduler.NETWORK_STATE_ANY;
+        int requiredNetwork;
         switch (job.getNetworkType()) {
             case JobInfo.NETWORK_TYPE_ANY:
                 requiredNetwork = GcmScheduler.NETWORK_STATE_CONNECTED;

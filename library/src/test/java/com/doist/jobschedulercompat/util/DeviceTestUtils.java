@@ -95,6 +95,7 @@ public class DeviceTestUtils {
     }
 
     public static void advanceTime(long timeMs) {
+        Robolectric.getBackgroundThreadScheduler().advanceBy(timeMs, TimeUnit.MILLISECONDS);
         Robolectric.getForegroundThreadScheduler().advanceBy(timeMs, TimeUnit.MILLISECONDS);
     }
 }

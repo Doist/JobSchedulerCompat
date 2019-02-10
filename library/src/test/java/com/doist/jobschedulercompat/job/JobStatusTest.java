@@ -112,7 +112,7 @@ public class JobStatusTest {
         // Metered connectivity.
         jobStatus = JobStatus.createFromJobInfo(
                 new JobInfo.Builder(0, component)
-                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_METERED).build(), "noop");
+                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_CELLULAR).build(), "noop");
         assertTrue(jobStatus.hasConnectivityConstraint());
         assertTrue(jobStatus.needsMeteredConnectivity());
         assertFalse(jobStatus.isReady());

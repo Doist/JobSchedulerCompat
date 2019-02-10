@@ -5,66 +5,60 @@ import com.doist.jobschedulercompat.JobService;
 
 import android.util.SparseArray;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
 public class NoopAsyncJobService extends JobService {
     public static final String EXTRA_DELAY = "delay";
 
-    private static SparseArray<Thread> threads = new SparseArray<>();
+    private static final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+    private static final SparseArray<ScheduledFuture> futures = new SparseArray<>();
 
     @Override
     public boolean onStartJob(final JobParameters params) {
-        Thread thread = new Thread() {
+        final int jobId = params.getJobId();
+        final ScheduledFuture future = executor.schedule(new Runnable() {
             @Override
             public void run() {
-                boolean stopped = false;
-                long delay = params.getExtras().getLong(EXTRA_DELAY);
-                if (delay > 0) {
-                    try {
-                        if (!isInterrupted()) {
-                            Thread.sleep(delay);
-                        }
-                    } catch (InterruptedException e) {
-                        stopped = true;
-                    }
-                }
-                threads.remove(params.getJobId());
-                if (!stopped) {
-                    jobFinished(params, false);
+                jobFinished(params, false);
+                synchronized (NoopAsyncJobService.class) {
+                    futures.remove(jobId);
                 }
             }
-        };
-        threads.put(params.getJobId(), thread);
-        thread.start();
+        }, params.getExtras().getLong(EXTRA_DELAY), TimeUnit.MILLISECONDS);
+        synchronized (NoopAsyncJobService.class) {
+            futures.append(jobId, future);
+        }
         return true;
     }
 
     @Override
     public boolean onStopJob(JobParameters params) {
         int jobId = params.getJobId();
-        threads.get(jobId).interrupt();
-        threads.remove(jobId);
+        futures.get(jobId).cancel(true);
+        synchronized (NoopAsyncJobService.class) {
+            futures.remove(jobId);
+        }
         return false;
     }
 
-    static void waitForJob(int id) {
-        Thread thread = threads.get(id);
-        if (thread != null) {
-            while (thread.isAlive()) {
-                try {
-                    Thread.sleep(5);
-                } catch (InterruptedException e) {
-                    // Ignore.
-                }
-            }
+    static void waitForJob(int jobId) {
+        try {
+            futures.get(jobId).get();
+        } catch (InterruptedException | ExecutionException e) {
+            // Ignore.
         }
     }
 
     static void interruptJobs() {
-        SparseArray<Thread> currentThreads = threads.clone();
-        for (int i = 0; i < currentThreads.size(); i++) {
-            currentThreads.valueAt(i).interrupt();
-        }
-        for (int i = 0; i < currentThreads.size(); i++) {
-            waitForJob(currentThreads.keyAt(i));
+        synchronized (NoopAsyncJobService.class) {
+            for (int i = 0; i < futures.size(); i++) {
+                futures.valueAt(i).cancel(true);
+            }
+            futures.clear();
         }
     }
 }

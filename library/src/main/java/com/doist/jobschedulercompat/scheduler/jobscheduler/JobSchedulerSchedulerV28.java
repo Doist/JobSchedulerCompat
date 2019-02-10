@@ -9,12 +9,12 @@ import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.annotation.RestrictTo;
 
-@TargetApi(Build.VERSION_CODES.O)
+@TargetApi(Build.VERSION_CODES.P)
 @RestrictTo(RestrictTo.Scope.LIBRARY)
-public class JobSchedulerSchedulerV26 extends JobSchedulerSchedulerV24 {
-    public static final String TAG = "PlatformSchedulerV26";
+public class JobSchedulerSchedulerV28 extends JobSchedulerSchedulerV26 {
+    public static final String TAG = "PlatformSchedulerV28";
 
-    public JobSchedulerSchedulerV26(Context context) {
+    public JobSchedulerSchedulerV28(Context context) {
         super(context);
     }
 
@@ -27,10 +27,12 @@ public class JobSchedulerSchedulerV26 extends JobSchedulerSchedulerV24 {
     protected android.app.job.JobInfo.Builder toPlatformJob(JobInfo job) {
         android.app.job.JobInfo.Builder builder = super.toPlatformJob(job);
 
-        builder.setTransientExtras(job.getTransientExtras());
-        builder.setClipData(job.getClipData(), job.getClipGrantFlags());
-        builder.setRequiresBatteryNotLow(job.isRequireBatteryNotLow());
-        builder.setRequiresStorageNotLow(job.isRequireStorageNotLow());
+        if (job.getRequiredNetwork() != null) {
+            builder.setRequiredNetwork(job.getRequiredNetwork());
+        }
+        builder.setEstimatedNetworkBytes(job.getEstimatedNetworkDownloadBytes(), job.getEstimatedNetworkUploadBytes());
+        builder.setImportantWhileForeground(job.isImportantWhileForeground());
+        builder.setPrefetch(job.isPrefetch());
 
         return builder;
     }

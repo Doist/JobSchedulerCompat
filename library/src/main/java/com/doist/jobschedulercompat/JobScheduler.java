@@ -11,6 +11,7 @@ import com.doist.jobschedulercompat.scheduler.gcm.GcmScheduler;
 import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV21;
 import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV24;
 import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV26;
+import com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV28;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -37,7 +38,7 @@ public class JobScheduler {
 
     static final int MAX_JOBS = 100;
 
-    Map<String, Scheduler> schedulers = new HashMap<>();
+    final Map<String, Scheduler> schedulers = new HashMap<>();
 
     @SuppressLint("StaticFieldLeak")
     private static JobScheduler instance;
@@ -49,8 +50,8 @@ public class JobScheduler {
         return instance;
     }
 
-    private Context context;
-    private JobStore jobStore;
+    private final Context context;
+    private final JobStore jobStore;
 
     private JobScheduler(Context context) {
         this.context = context.getApplicationContext();
@@ -213,12 +214,16 @@ public class JobScheduler {
 
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     Scheduler getSchedulerForJob(Context context, JobInfo job) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return getSchedulerForTag(context, JobSchedulerSchedulerV28.TAG);
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return getSchedulerForTag(context, JobSchedulerSchedulerV26.TAG);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-                && job.getNetworkType() != JobInfo.NETWORK_TYPE_METERED
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_CELLULAR
                 && !job.isRequireBatteryNotLow()
                 && !job.isRequireStorageNotLow()) {
             return getSchedulerForTag(context, JobSchedulerSchedulerV24.TAG);
@@ -227,7 +232,7 @@ public class JobScheduler {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
                 && (!job.isPeriodic() || job.getFlexMillis() >= job.getIntervalMillis())
                 && job.getNetworkType() != JobInfo.NETWORK_TYPE_NOT_ROAMING
-                && job.getNetworkType() != JobInfo.NETWORK_TYPE_METERED
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_CELLULAR
                 && job.getTriggerContentUris() == null
                 && !job.isRequireBatteryNotLow()
                 && !job.isRequireStorageNotLow()) {
@@ -244,7 +249,7 @@ public class JobScheduler {
         }
         if (gcmAvailable
                 && job.getNetworkType() != JobInfo.NETWORK_TYPE_NOT_ROAMING
-                && job.getNetworkType() != JobInfo.NETWORK_TYPE_METERED
+                && job.getNetworkType() != JobInfo.NETWORK_TYPE_CELLULAR
                 && !job.isRequireBatteryNotLow()
                 && !job.isRequireStorageNotLow()) {
             return getSchedulerForTag(context, GcmScheduler.TAG);
@@ -258,6 +263,9 @@ public class JobScheduler {
         Scheduler scheduler = schedulers.get(tag);
         if (scheduler == null) {
             switch (tag) {
+                case JobSchedulerSchedulerV28.TAG:
+                    scheduler = new JobSchedulerSchedulerV28(context);
+                    break;
                 case JobSchedulerSchedulerV26.TAG:
                     scheduler = new JobSchedulerSchedulerV26(context);
                     break;

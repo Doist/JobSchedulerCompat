@@ -128,8 +128,8 @@ public class GcmJobService extends Service implements JobService.Binder.Callback
         if (jobStatus != null) {
             JobInfo job = jobStatus.getJob();
             JobParameters params = new JobParameters(
-                    jobId, new PersistableBundle(extras), job.getTransientExtras(),
-                    isOverrideDeadlineExpired(jobStatus), triggeredUris, triggeredAuthorities);
+                    jobId, new PersistableBundle(extras), job.getTransientExtras(), null,
+                    triggeredUris, triggeredAuthorities, isOverrideDeadlineExpired(jobStatus));
             Connection connection = new Connection(jobId, startId, params, callback);
             Intent jobIntent = new Intent();
             ComponentName service = jobStatus.getServiceComponent();

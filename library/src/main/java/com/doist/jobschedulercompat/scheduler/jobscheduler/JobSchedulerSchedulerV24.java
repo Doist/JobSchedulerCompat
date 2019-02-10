@@ -11,8 +11,7 @@ import androidx.annotation.RestrictTo;
 
 @TargetApi(Build.VERSION_CODES.N)
 @RestrictTo(RestrictTo.Scope.LIBRARY)
-public class JobSchedulerSchedulerV24
-        extends com.doist.jobschedulercompat.scheduler.jobscheduler.JobSchedulerSchedulerV21 {
+public class JobSchedulerSchedulerV24 extends JobSchedulerSchedulerV21 {
     public static final String TAG = "PlatformSchedulerV24";
 
     public JobSchedulerSchedulerV24(Context context) {

@@ -17,7 +17,7 @@ import androidx.annotation.RestrictTo;
 public class JobSchedulerSchedulerV21 extends Scheduler {
     public static final String TAG = "PlatformSchedulerV21";
 
-    private JobScheduler jobScheduler;
+    private final JobScheduler jobScheduler;
 
     public JobSchedulerSchedulerV21(Context context) {
         super(context);

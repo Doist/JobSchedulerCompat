@@ -16,12 +16,12 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import androidx.test.core.app.ApplicationProvider;
-import edu.emory.mathcs.backport.java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

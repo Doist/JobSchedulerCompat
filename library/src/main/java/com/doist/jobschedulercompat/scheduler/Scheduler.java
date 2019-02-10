@@ -17,7 +17,7 @@ public abstract class Scheduler {
     protected static final int RESULT_SUCCESS = JobScheduler.RESULT_SUCCESS;
     protected static final int RESULT_FAILURE = JobScheduler.RESULT_FAILURE;
 
-    protected Context context;
+    protected final Context context;
 
     protected Scheduler(Context context) {
         this.context = context;

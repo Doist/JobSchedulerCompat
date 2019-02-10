@@ -105,7 +105,7 @@ public class JobStatus {
             case JobInfo.NETWORK_TYPE_NOT_ROAMING:
                 requiredConstraints |= CONSTRAINT_NOT_ROAMING;
                 break;
-            case JobInfo.NETWORK_TYPE_METERED:
+            case JobInfo.NETWORK_TYPE_CELLULAR:
                 requiredConstraints |= CONSTRAINT_METERED;
                 break;
         }

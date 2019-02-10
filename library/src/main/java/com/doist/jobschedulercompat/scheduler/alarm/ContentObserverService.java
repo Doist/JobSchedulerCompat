@@ -106,7 +106,7 @@ public class ContentObserverService extends Service {
     }
 
     class Observer extends ContentObserver {
-        Set<Integer> jobIds = new HashSet<>();
+        final Set<Integer> jobIds = new HashSet<>();
 
         Observer(Handler handler) {
             super(handler);

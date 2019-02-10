@@ -596,7 +596,7 @@ public class JobStore {
             }
             val = parser.getAttributeValue(null, "metered");
             if (val != null) {
-                jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_METERED);
+                jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_CELLULAR);
             }
             val = parser.getAttributeValue(null, "unmetered");
             if (val != null) {
@@ -712,7 +712,7 @@ public class JobStore {
     }
 
     static class JobSet {
-        SparseArray<JobStatus> mJobs;
+        final SparseArray<JobStatus> mJobs;
 
         JobSet() {
             mJobs = new SparseArray<>();

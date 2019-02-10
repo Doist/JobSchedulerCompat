@@ -43,7 +43,6 @@ public class JobGcReceiverTest {
 
     @Test
     public void testBootReceiverRegistered() {
-        // TODO
         Intent intent = new Intent(Intent.ACTION_BOOT_COMPLETED);
         List<BroadcastReceiver> receivers = shadowOf(application).getReceiversForIntent(intent);
         assertThat(receivers, hasItem(isA(JobGcReceiver.class)));

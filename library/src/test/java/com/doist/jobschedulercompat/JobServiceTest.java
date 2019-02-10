@@ -22,8 +22,8 @@ public class JobServiceTest {
     private static final long THREAD_WAIT_MS = 100;
     private static final Object THREAD_LOCK = new Object();
 
-    private JobParameters params =
-            new JobParameters(0, PersistableBundle.EMPTY, Bundle.EMPTY, false, null, null);
+    private final JobParameters params =
+            new JobParameters(0, PersistableBundle.EMPTY, Bundle.EMPTY, null, null, null, false);
 
     @Test
     public void testFinishesSynchronously() {
@@ -94,9 +94,9 @@ public class JobServiceTest {
         final AtomicInteger finished = new AtomicInteger(0);
         for (int i = 0; i < 10; i++) {
             JobParameters params = new JobParameters(
-                    this.params.getJobId() + i, this.params.getExtras(), this.params.getTransientExtras(),
-                    this.params.isOverrideDeadlineExpired(), this.params.getTriggeredContentUris(),
-                    this.params.getTriggeredContentAuthorities());
+                    this.params.getJobId() + i, this.params.getExtras(), this.params.getTransientExtras(), null,
+                    this.params.getTriggeredContentUris(), this.params.getTriggeredContentAuthorities(),
+                    this.params.isOverrideDeadlineExpired());
             assertTrue(binder.startJob(params, new JobService.Binder.Callback() {
                 @Override
                 public void jobFinished(JobParameters params, boolean needsReschedule) {

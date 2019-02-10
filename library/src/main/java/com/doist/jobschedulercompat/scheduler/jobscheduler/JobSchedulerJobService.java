@@ -99,23 +99,26 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
     }
 
-    private JobParameters toLocalParameters(android.app.job.JobParameters params, Bundle transientExtras) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+     private JobParameters toLocalParameters(android.app.job.JobParameters params, Bundle transientExtras) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             return new JobParameters(
                     params.getJobId(), new PersistableBundle(params.getExtras()), params.getTransientExtras(),
-                    params.isOverrideDeadlineExpired(), params.getTriggeredContentUris(),
-                    params.getTriggeredContentAuthorities());
+                    params.getNetwork(), params.getTriggeredContentUris(), params.getTriggeredContentAuthorities(),
+                    params.isOverrideDeadlineExpired());
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return new JobParameters(
+                    params.getJobId(), new PersistableBundle(params.getExtras()), params.getTransientExtras(), null,
+                    params.getTriggeredContentUris(), params.getTriggeredContentAuthorities(),
+                    params.isOverrideDeadlineExpired());
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            return new JobParameters(
+                    params.getJobId(), new PersistableBundle(params.getExtras()), transientExtras, null,
+                    params.getTriggeredContentUris(), params.getTriggeredContentAuthorities(),
+                    params.isOverrideDeadlineExpired());
         } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                return new JobParameters(
-                        params.getJobId(), new PersistableBundle(params.getExtras()), transientExtras,
-                        params.isOverrideDeadlineExpired(), params.getTriggeredContentUris(),
-                        params.getTriggeredContentAuthorities());
-            } else {
-                return new JobParameters(
-                        params.getJobId(), new PersistableBundle(params.getExtras()), transientExtras,
-                        params.isOverrideDeadlineExpired(), null, null);
-            }
+            return new JobParameters(
+                    params.getJobId(), new PersistableBundle(params.getExtras()), transientExtras, null,
+                    null, null, params.isOverrideDeadlineExpired());
         }
     }
 

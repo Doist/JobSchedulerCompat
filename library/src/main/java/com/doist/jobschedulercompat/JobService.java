@@ -42,7 +42,7 @@ public abstract class JobService extends Service {
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     public static class Binder extends android.os.Binder {
         private final WeakReference<JobService> serviceRef;
-        private SparseArray<Callback> callbacks;
+        private final SparseArray<Callback> callbacks;
 
         Binder(JobService service) {
             super();

@@ -30,8 +30,8 @@ import static org.robolectric.Shadows.shadowOf;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = Build.VERSION_CODES.KITKAT, shadows = {ShadowNetworkInfo.class})
 public class AlarmJobServiceTest {
-    private static long DELAY_MS = 500;
-    private static long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
+    private static final long DELAY_MS = 500;
+    private static final long LATENCY_MS = TimeUnit.HOURS.toMillis(1);
 
     private Application application;
     private JobStore jobStore;

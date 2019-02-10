@@ -14,8 +14,11 @@ import org.robolectric.annotation.Config;
 import android.annotation.TargetApi;
 import android.app.Application;
 import android.app.job.JobScheduler;
+import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,6 +29,10 @@ import java.util.concurrent.TimeUnit;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN;
+import static android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -41,7 +48,9 @@ public class JobSchedulerSchedulerTest {
     @Before
     public void setup() {
         application = ApplicationProvider.getApplicationContext();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            scheduler = new JobSchedulerSchedulerV28(application);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             scheduler = new JobSchedulerSchedulerV26(application);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             scheduler = new JobSchedulerSchedulerV24(application);
@@ -53,21 +62,21 @@ public class JobSchedulerSchedulerTest {
 
     @Test
     public void testScheduleJob() {
-        JobInfo job = createJob(0);
+        JobInfo job = createJob(0).build();
         scheduler.schedule(job);
 
         android.app.job.JobInfo nativeJob = getPendingJob(job.getId());
         assertNotNull(nativeJob);
         assertNativeJobInfoMatchesJobInfo(nativeJob, job);
 
-        job = createJob(1);
+        job = createJob(1).build();
         scheduler.schedule(job);
 
         nativeJob = getPendingJob(job.getId());
         assertNotNull(nativeJob);
         assertNativeJobInfoMatchesJobInfo(nativeJob, job);
 
-        job = createJob(2);
+        job = createJob(2).build();
         scheduler.schedule(job);
 
         nativeJob = getPendingJob(job.getId());
@@ -76,8 +85,46 @@ public class JobSchedulerSchedulerTest {
     }
 
     @Test
+    @Config(sdk = Build.VERSION_CODES.O)
+    public void testScheduleJobWithOreoOption() {
+        JobInfo.Builder builder = createJob(2);
+        builder.setClipData(new ClipData("TestClipData", new String[] { "application/*" }, new ClipData.Item(
+                Uri.parse("content://com.doist.jobschedulercompat"))), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        JobInfo job = builder.build();
+
+        scheduler.schedule(job);
+
+        android.app.job.JobInfo nativeJob = getPendingJob(job.getId());
+        assertNotNull(nativeJob);
+        assertNativeJobInfoMatchesJobInfo(nativeJob, job);
+    }
+
+    @Test
+    @Config(sdk = Build.VERSION_CODES.P)
+    public void testScheduleJobWithPieOption() {
+        JobInfo.Builder builder = createJob(1);
+        builder.setRequiredNetwork(
+                new NetworkRequest.Builder()
+                        .addCapability(NET_CAPABILITY_INTERNET)
+                        .addCapability(NET_CAPABILITY_VALIDATED)
+                        .removeCapability(NET_CAPABILITY_NOT_VPN)
+                        .addCapability(NET_CAPABILITY_NOT_ROAMING)
+                        .build());
+        builder.setEstimatedNetworkBytes(1024, 128);
+        builder.setImportantWhileForeground(true);
+        builder.setPrefetch(true);
+        JobInfo job = builder.build();
+
+        scheduler.schedule(job);
+
+        android.app.job.JobInfo nativeJob = getPendingJob(job.getId());
+        assertNotNull(nativeJob);
+        assertNativeJobInfoMatchesJobInfo(nativeJob, job);
+    }
+
+    @Test
     public void testCancelJob() {
-        JobInfo job = createJob(0);
+        JobInfo job = createJob(0).build();
         scheduler.schedule(job);
         scheduler.cancel(job.getId());
 
@@ -86,9 +133,9 @@ public class JobSchedulerSchedulerTest {
 
     @Test
     public void testCancelAllBroadcasts() {
-        scheduler.schedule(createJob(0));
-        scheduler.schedule(createJob(1));
-        scheduler.schedule(createJob(2));
+        scheduler.schedule(createJob(0).build());
+        scheduler.schedule(createJob(1).build());
+        scheduler.schedule(createJob(2).build());
         scheduler.cancelAll();
 
         assertEquals(0, jobScheduler.getAllPendingJobs().size());
@@ -108,7 +155,11 @@ public class JobSchedulerSchedulerTest {
         assertEquals(nativeJob.getInitialBackoffMillis(), job.getInitialBackoffMillis());
         assertEquals(nativeJob.getBackoffPolicy(), job.getBackoffPolicy());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            assertEquals(nativeJob.getFlexMillis(), job.getFlexMillis());
+            if (job.getFlexMillis() == 0 && Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                assertEquals(nativeJob.getFlexMillis(), JobInfo.getMinFlexMillis());
+            } else {
+                assertEquals(nativeJob.getFlexMillis(), job.getFlexMillis());
+            }
             assertArrayEquals(getUris(nativeJob.getTriggerContentUris()), getUris(job.getTriggerContentUris()));
             assertEquals(nativeJob.getTriggerContentUpdateDelay(), job.getTriggerContentUpdateDelay());
             assertEquals(nativeJob.getTriggerContentMaxDelay(), job.getTriggerContentMaxDelay());
@@ -119,18 +170,26 @@ public class JobSchedulerSchedulerTest {
                     BundleUtils.toMap(job.getTransientExtras(), 10));
             assertEquals(nativeJob.isRequireBatteryNotLow(), job.isRequireBatteryNotLow());
             assertEquals(nativeJob.isRequireStorageNotLow(), job.isRequireBatteryNotLow());
+            assertEquals(nativeJob.getClipData(), job.getClipData());
+            assertEquals(nativeJob.getClipGrantFlags(), job.getClipGrantFlags());
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            assertEquals(nativeJob.getRequiredNetwork(), job.getRequiredNetwork());
+            assertEquals(nativeJob.getEstimatedNetworkDownloadBytes(), job.getEstimatedNetworkDownloadBytes());
+            assertEquals(nativeJob.getEstimatedNetworkUploadBytes(), job.getEstimatedNetworkUploadBytes());
+            assertEquals(nativeJob.isImportantWhileForeground(), job.isImportantWhileForeground());
+            assertEquals(nativeJob.isPrefetch(), job.isPrefetch());
         }
     }
 
-    private JobInfo createJob(int type) {
+    private JobInfo.Builder createJob(int type) {
         switch (type) {
             case 0:
                 return JobCreator.create(application)
                                  .setMinimumLatency(TimeUnit.HOURS.toMillis(2))
                                  .setOverrideDeadline(TimeUnit.DAYS.toMillis(1))
                                  .setRequiresCharging(true)
-                                 .setPersisted(true)
-                                 .build();
+                                 .setPersisted(true);
 
             case 1:
                 PersistableBundle extras = new PersistableBundle();
@@ -146,16 +205,14 @@ public class JobSchedulerSchedulerTest {
                                          MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                                          JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
                                  .setTriggerContentUpdateDelay(TimeUnit.SECONDS.toMillis(1))
-                                 .setTriggerContentMaxDelay(TimeUnit.SECONDS.toMillis(30))
-                                 .build();
+                                 .setTriggerContentMaxDelay(TimeUnit.SECONDS.toMillis(30));
 
             case 2:
             default:
                 return JobCreator.create(application)
                                  .setPeriodic(TimeUnit.MINUTES.toMillis(30), TimeUnit.MINUTES.toMillis(5))
                                  .setRequiresDeviceIdle(true)
-                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
-                                 .build();
+                                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED);
         }
     }
 

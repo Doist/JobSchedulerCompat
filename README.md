@@ -60,13 +60,13 @@ As all regular services, it needs to be declared in your `AndroidManifest.xml`:
 
 All necessary components have compatibility variants and follow their counterparts' APIs, with a few limitations:
 
-| Component           | Modeled after                            | Limitations                              |
-| ------------------- | ---------------------------------------- | ---------------------------------------- |
-| `JobScheduler`      | [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html) | [`JobScheduler#enqueue(JobInfo, JobWorkItem)`](https://developer.android.com/reference/android/app/job/JobScheduler.html#enqueue(android.app.job.JobInfo, android.app.job.JobWorkItem)) and related APIs. |
-| `JobInfo`           | [`JobInfo`](https://developer.android.com/reference/android/app/job/JobInfo.html) | [`JobInfo#setClipData(ClipData, int)`](https://developer.android.com/reference/android/app/job/JobInfo.Builder.html#setClipData(android.content.ClipData, int)) and related APIs. |
-| `JobService`        | [`JobService`](https://developer.android.com/reference/android/app/job/JobService.html) | None.                                    |
-| `JobParameters`     | [`JobParameters`](https://developer.android.com/reference/android/app/job/JobParameters.html) | [`JobParameters#getClipData()`](https://developer.android.com/reference/android/app/job/JobParameters.html#getClipData()) and related APIs. |
-| `PersistableBundle` | [`PersistableBundle`](https://developer.android.com/reference/android/os/PersistableBundle.html) | None.                                    |
+| Component           | Modeled after                                                | Limitations                                                  |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `JobScheduler`      | [`JobScheduler`](https://developer.android.com/reference/android/app/job/JobScheduler.html) | [`JobScheduler#enqueue(JobInfo, JobWorkItem)`](https://developer.android.com/reference/android/app/job/JobScheduler.html#enqueue(android.app.job.JobInfo,%20android.app.job.JobWorkItem)) and related APIs are unavailable. |
+| `JobInfo`           | [`JobInfo`](https://developer.android.com/reference/android/app/job/JobInfo.html) | [`JobInfo.Builder#setClipData(ClipData, int)`](https://developer.android.com/reference/android/app/job/JobInfo.Builder.html#setClipData(android.content.ClipData,%20int)) and related APIs are only available on O+.<br/>[`JobInfo.Builder#setRequiredNetwork`](https://developer.android.com/reference/android/app/job/JobInfo.Builder#setRequiredNetwork(android.net.NetworkRequest)) and related APIs are only available on P+. |
+| `JobService`        | [`JobService`](https://developer.android.com/reference/android/app/job/JobService.html) | None.                                                        |
+| `JobParameters`     | [`JobParameters`](https://developer.android.com/reference/android/app/job/JobParameters.html) | [`JobParameters#getClipData()`](https://developer.android.com/reference/android/app/job/JobParameters.html#getClipData()) and related APIs are only available on O+.<br>[`JobParameters#getNetwork()`](https://developer.android.com/reference/android/app/job/JobParameters.html#getNetwork()) and related APIs are only available on P+. |
+| `PersistableBundle` | [`PersistableBundle`](https://developer.android.com/reference/android/os/PersistableBundle.html) | None.                                                        |
 
 
 
@@ -91,9 +91,9 @@ We looked at the status quo:
 
 | Library                                  | Minimum SDK  | Requires Google Play Services | Uses best job scheduling engine for context | Same API as JobScheduler |
 | ---------------------------------------- | ------------ | ----------------------------- | ---------------------------------------- | ------------------------ |
-| Framework's [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) | 21, 24 or 26 | No.                           | Yes.                                     | Yes.                     |
-| [Firebase JobDispatcher](https://github.com/firebase/firebase-jobdispatcher-android) | 9            | Yes.                          | No.                                      | No.                      |
-| Evernote's [Android-Job](https://github.com/evernote/android-job) | 14           | No.                           | Yes.                                     | No.                      |
+| Framework's [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler.html) | 21, 24, 26 or 28 | No                           | Yes                                     | Yes                     |
+| [Firebase JobDispatcher](https://github.com/firebase/firebase-jobdispatcher-android) | 14          | Yes                          | No                                      | No                      |
+| Evernote's [Android-Job](https://github.com/evernote/android-job) | 14           | No                           | Yes                                     | No                      |
 
 
 
@@ -106,7 +106,7 @@ License
 -------
 
 ```
-Copyright 2017 Doist
+Copyright 2019 Doist
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
