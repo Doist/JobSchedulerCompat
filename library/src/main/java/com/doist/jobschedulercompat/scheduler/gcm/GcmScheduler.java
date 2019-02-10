@@ -19,6 +19,11 @@ import androidx.annotation.RestrictTo;
 
 /**
  * {@link Scheduler} based on {@link GcmNetworkManager}.
+ *
+ * @see <a href="https://developers.google.com/android/reference/com/google/android/gms/gcm/Task">Task</a>
+ * @see <a href="https://developers.google.com/android/reference/com/google/android/gms/gcm/PeriodicTask">PeriodicTask</a>
+ * @see <a href="https://developers.google.com/android/reference/com/google/android/gms/gcm/OneoffTask">OneoffTask</a>
+ * @see <a href="https://github.com/firebase/firebase-jobdispatcher-android/blob/master/jobdispatcher/src/main/java/com/firebase/jobdispatcher/GooglePlayJobWriter.java">FirebaseJobDispatcher</a>
  */
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public class GcmScheduler extends Scheduler {
@@ -62,7 +67,10 @@ public class GcmScheduler extends Scheduler {
 
     static final String PARAM_COMPONENT = "component";
 
-    /* I'm in your code, stealing your variables. */
+    /*
+     * This is found in Firebase JobDispatcher's code, presumably ensuring that Google Play Services maintains
+     * compatibility with the way the data is fed into it (ie. the variables and workflow below).
+     */
     private static final int JOB_DISPATCHER_SOURCE_CODE = 1 << 3;
     private static final int JOB_DISPATCHER_SOURCE_VERSION_CODE = 1;
 

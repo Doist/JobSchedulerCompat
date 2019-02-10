@@ -1,5 +1,8 @@
 package com.doist.jobschedulercompat.scheduler.gcm;
 
+import com.google.android.gms.gcm.GcmNetworkManager;
+
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -11,6 +14,11 @@ import java.util.List;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+/**
+ * Parses the {@link Intent#getExtras() extras} sent by {@link GcmNetworkManager} when it's time to execute a job.
+ * These extras contain vital information about the job, including the {@link IBinder callback} to notify about the
+ * job's success or failure.
+ */
 public class GcmIntentParser {
     /** The Parcelable class that wraps the Binder we need to access. */
     private static final String PENDING_CALLBACK_CLASS = "com.google.android.gms.gcm.PendingCallback";
@@ -22,9 +30,9 @@ public class GcmIntentParser {
     static final String BUNDLE_KEY_TRIGGERED_URIS = "triggered_uris";
     /** The key for the wrapped Binder. */
     static final String BUNDLE_KEY_CALLBACK = "callback";
-    /** A magic number that indicates the following bytes belong to a Bundle. */
+    /** A magic number that indicates the following bytes belong to a Bundle, as defined in {@link Bundle}. */
     private static final int BUNDLE_MAGIC = 0x4C444E42;
-    /** A magic number that indicates the following value is a Parcelable. */
+    /** A magic number that indicates the following value is a Parcelable, as defined in {@link Parcel}. */
     private static final int VAL_PARCELABLE = 4;
 
     private static Boolean shouldReadKeysAsStrings = null;

@@ -37,7 +37,10 @@ public abstract class JobService extends Service {
     }
 
     /**
-     * Proxies callbacks from scheduler-specific job services to the user's {@link JobService}.
+     * Proxies callbacks between the scheduler job service that is handling the work and the user's {@link JobService}.
+     *
+     * All scheduler job services bind to this service to proxy their lifecycle. This allows maintaining parity with
+     * JobScheduler's API, while hiding implementation details away from the user.
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     public static class Binder extends android.os.Binder {

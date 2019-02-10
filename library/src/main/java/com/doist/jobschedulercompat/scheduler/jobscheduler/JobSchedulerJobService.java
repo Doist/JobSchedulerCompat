@@ -19,7 +19,7 @@ import android.util.SparseArray;
 import androidx.annotation.RestrictTo;
 
 /**
- * Job service for {@link JobSchedulerSchedulerV21}, the {@link android.app.job.JobScheduler}-based scheduler.
+ * Job service for all {@link android.app.job.JobScheduler}-based schedulers, such as {@link JobSchedulerSchedulerV21}.
  *
  * This service runs whenever {@link android.app.job.JobScheduler} starts it based on the current jobs and constraints.
  */

@@ -37,15 +37,15 @@ public class AlarmScheduler extends Scheduler {
         AlarmJobService.start(context);
     }
 
+    @Override
+    public void onJobCompleted(int jobId, boolean needsReschedule) {
+        AlarmJobService.start(context);
+    }
+
     @NonNull
     @Override
     public String getTag() {
         return TAG;
-    }
-
-    @Override
-    public void onJobCompleted(int jobId, boolean needsReschedule) {
-        AlarmJobService.start(context);
     }
 
     @Override

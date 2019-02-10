@@ -10,7 +10,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RestrictTo;
 
 /**
- * Abstraction to schedule and cancel jobs as defined by {@link JobInfo}.
+ * Abstraction to schedule and cancel jobs, as well as handle key parts of a job's lifecycle.
+ *
+ * Implementations should delegate as much as possible to whichever API they use (eg. JobScheduler).
  */
 @RestrictTo(RestrictTo.Scope.LIBRARY)
 public abstract class Scheduler {
