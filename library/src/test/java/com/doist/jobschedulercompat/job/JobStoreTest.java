@@ -105,7 +105,7 @@ public class JobStoreTest {
         JobStatus loaded2 = it.next();
 
         // Reverse them so we know which comparison to make.
-        if (loaded1.getJobId() != 1) {
+        if (loaded1.getJobId() != job1.getId()) {
             JobStatus tmp = loaded1;
             loaded1 = loaded2;
             loaded2 = tmp;

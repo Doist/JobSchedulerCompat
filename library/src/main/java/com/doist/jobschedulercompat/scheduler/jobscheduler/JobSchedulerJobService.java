@@ -99,7 +99,7 @@ public class JobSchedulerJobService extends android.app.job.JobService implement
         jobScheduler.onJobCompleted(connection.jobId, needsReschedule);
     }
 
-     private JobParameters toLocalParameters(android.app.job.JobParameters params, Bundle transientExtras) {
+    private JobParameters toLocalParameters(android.app.job.JobParameters params, Bundle transientExtras) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             return new JobParameters(
                     params.getJobId(), new PersistableBundle(params.getExtras()), params.getTransientExtras(),

@@ -22,7 +22,8 @@ public class JobParameters {
 
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     public JobParameters(int jobId, PersistableBundle extras, Bundle transientExtras, Network network,
-                         Uri[] triggeredContentUris, String[] triggeredContentAuthorities, boolean overrideDeadlineExpired) {
+                         Uri[] triggeredContentUris, String[] triggeredContentAuthorities,
+                         boolean overrideDeadlineExpired) {
         this.jobId = jobId;
         this.extras = extras;
         this.transientExtras = transientExtras;

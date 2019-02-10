@@ -4,6 +4,7 @@ import com.doist.jobschedulercompat.JobInfo;
 import com.doist.jobschedulercompat.PersistableBundle;
 
 import android.app.Application;
+import android.app.Service;
 import android.content.ComponentName;
 import android.os.IBinder;
 
@@ -12,6 +13,10 @@ import static org.robolectric.Shadows.shadowOf;
 public class JobCreator {
     private static int id = 0;
 
+    // Keep a reference to both services since the binder (obtained below via onBind()) only holds a weak reference.
+    private static Service noopService = new NoopJobService();
+    private static Service noopAsyncService = new NoopAsyncJobService();
+
     public static JobInfo.Builder create(Application application) {
         return create(application, 0);
     }
@@ -19,20 +24,19 @@ public class JobCreator {
     public static JobInfo.Builder create(Application application, long delay) {
         ComponentName component;
         PersistableBundle extras;
-        IBinder service;
+        IBinder binder;
         if (delay > 0) {
             component = new ComponentName(application, NoopAsyncJobService.class);
             extras = new PersistableBundle();
             extras.putLong(NoopAsyncJobService.EXTRA_DELAY, delay);
-            service = new NoopAsyncJobService().onBind(null);
+            binder = noopAsyncService.onBind(null);
         } else {
             component = new ComponentName(application, NoopJobService.class);
             extras = PersistableBundle.EMPTY;
-            service = new NoopJobService().onBind(null);
+            binder = noopService.onBind(null);
         }
-        JobInfo.Builder builder = new JobInfo.Builder(id++, component).setExtras(extras);
-        shadowOf(application).setComponentNameAndServiceForBindService(component, service);
-        return builder;
+        shadowOf(application).setComponentNameAndServiceForBindService(component, binder);
+        return new JobInfo.Builder(id++, component).setExtras(extras);
     }
 
     public static void waitForJob(int id) {

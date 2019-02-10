@@ -88,7 +88,7 @@ public class JobSchedulerSchedulerTest {
     @Config(sdk = Build.VERSION_CODES.O)
     public void testScheduleJobWithOreoOption() {
         JobInfo.Builder builder = createJob(2);
-        builder.setClipData(new ClipData("TestClipData", new String[] { "application/*" }, new ClipData.Item(
+        builder.setClipData(new ClipData("TestClipData", new String[]{"application/*"}, new ClipData.Item(
                 Uri.parse("content://com.doist.jobschedulercompat"))), Intent.FLAG_GRANT_READ_URI_PERMISSION);
         JobInfo job = builder.build();
 
