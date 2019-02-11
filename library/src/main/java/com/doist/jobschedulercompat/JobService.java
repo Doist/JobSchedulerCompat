@@ -41,6 +41,9 @@ public abstract class JobService extends Service {
      *
      * All scheduler job services bind to this service to proxy their lifecycle. This allows maintaining parity with
      * JobScheduler's API, while hiding implementation details away from the user.
+     *
+     * Methods are synchronized to prevent race conditions when updating {@link #callbacks}.
+     * There are no guarantees on which thread calls {@link #notifyJobFinished(JobParameters, boolean)}.
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     public static class Binder extends android.os.Binder {
@@ -53,17 +56,21 @@ public abstract class JobService extends Service {
             this.callbacks = new SparseArray<>(1);
         }
 
-        public boolean startJob(JobParameters params, Callback callback) {
+        public synchronized boolean startJob(JobParameters params, Callback callback) {
             JobService service = serviceRef.get();
             if (service != null) {
                 callbacks.put(params.getJobId(), callback);
-                return service.onStartJob(params);
+                boolean willContinueRunning = service.onStartJob(params);
+                if (!willContinueRunning) {
+                    callbacks.remove(params.getJobId());
+                }
+                return willContinueRunning;
             } else {
                 return false;
             }
         }
 
-        public boolean stopJob(JobParameters params) {
+        public synchronized boolean stopJob(JobParameters params) {
             JobService service = serviceRef.get();
             if (service != null) {
                 callbacks.remove(params.getJobId());
@@ -73,7 +80,7 @@ public abstract class JobService extends Service {
             }
         }
 
-        void notifyJobFinished(JobParameters params, boolean needsReschedule) {
+        synchronized void notifyJobFinished(JobParameters params, boolean needsReschedule) {
             Callback callback = callbacks.get(params.getJobId());
             if (callback != null) {
                 callbacks.remove(params.getJobId());
