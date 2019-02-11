@@ -46,7 +46,9 @@ public class JobSchedulerJobServiceTest {
     @After
     public void teardown() {
         JobCreator.interruptJobs();
-        jobStore.clear();
+        synchronized (JobStore.LOCK) {
+            jobStore.clear();
+        }
     }
 
     @Test

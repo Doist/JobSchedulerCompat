@@ -8,10 +8,12 @@ import android.app.Service;
 import android.content.ComponentName;
 import android.os.IBinder;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.robolectric.Shadows.shadowOf;
 
 public class JobCreator {
-    private static int id = 0;
+    private static AtomicInteger id = new AtomicInteger();
 
     // Keep a reference to both services since the binder (obtained below via onBind()) only holds a weak reference.
     private static Service noopService = new NoopJobService();
@@ -36,7 +38,7 @@ public class JobCreator {
             binder = noopService.onBind(null);
         }
         shadowOf(application).setComponentNameAndServiceForBindService(component, binder);
-        return new JobInfo.Builder(id++, component).setExtras(extras);
+        return new JobInfo.Builder(id.incrementAndGet(), component).setExtras(extras);
     }
 
     public static void waitForJob(int id) {

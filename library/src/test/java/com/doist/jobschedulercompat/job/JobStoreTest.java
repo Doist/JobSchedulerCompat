@@ -39,7 +39,9 @@ public class JobStoreTest {
 
     @After
     public void teardown() {
-        jobStore.clear();
+        synchronized (JobStore.LOCK) {
+            jobStore.clear();
+        }
     }
 
     @Test

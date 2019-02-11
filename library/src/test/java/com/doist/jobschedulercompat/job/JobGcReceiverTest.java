@@ -38,7 +38,9 @@ public class JobGcReceiverTest {
 
     @After
     public void teardown() {
-        jobStore.clear();
+        synchronized (JobStore.LOCK) {
+            jobStore.clear();
+        }
     }
 
     @Test

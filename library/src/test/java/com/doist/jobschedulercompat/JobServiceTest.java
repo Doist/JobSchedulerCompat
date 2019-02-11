@@ -10,20 +10,18 @@ import org.robolectric.RobolectricTestRunner;
 
 import android.os.Bundle;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
 public class JobServiceTest {
-    private static final long THREAD_WAIT_MS = 100;
-    private static final Object THREAD_LOCK = new Object();
+    private static final int TIMEOUT_MS = 200;
+    private static final int PARALLEL_COUNT = 1000;
 
-    private final JobParameters params =
-            new JobParameters(0, PersistableBundle.EMPTY, Bundle.EMPTY, null, null, null, false);
+    private JobParameters params = new JobParameters(0, PersistableBundle.EMPTY, Bundle.EMPTY, null, null, null, false);
 
     @Test
     public void testFinishesSynchronously() {
@@ -34,89 +32,64 @@ public class JobServiceTest {
     }
 
     @Test
-    public void testFinishesAsynchronously() {
+    public void testFinishesAsynchronously() throws InterruptedException {
         JobService.Binder binder =
                 (JobService.Binder) Robolectric.buildService(NoopAsyncJobService.class).create().get().onBind(null);
 
-        final AtomicBoolean finished = new AtomicBoolean(false);
+        final CountDownLatch doneSignal = new CountDownLatch(1);
         assertTrue(binder.startJob(params, new JobService.Binder.Callback() {
             @Override
             public void jobFinished(JobParameters params, boolean needsReschedule) {
-                finished.set(true);
-                synchronized (THREAD_LOCK) {
-                    THREAD_LOCK.notify();
-                }
+                doneSignal.countDown();
             }
         }));
 
-        synchronized (THREAD_LOCK) {
-            try {
-                THREAD_LOCK.wait(THREAD_WAIT_MS);
-            } catch (InterruptedException e) {
-                // Do nothing.
-            }
-        }
-        assertTrue(finished.get());
+        assertTrue(doneSignal.await(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     }
 
     @Test
-    public void testDoesntFinishIfStopped() {
+    public void testDoesntFinishIfStopped() throws InterruptedException {
         JobService.Binder binder =
                 (JobService.Binder) Robolectric.buildService(NoopAsyncJobService.class).create().get().onBind(null);
 
-        final AtomicBoolean finished = new AtomicBoolean(false);
+        final CountDownLatch doneSignal = new CountDownLatch(1);
+        final CountDownLatch continueSignal = new CountDownLatch(1);
         assertTrue(binder.startJob(params, new JobService.Binder.Callback() {
             @Override
             public void jobFinished(JobParameters params, boolean needsReschedule) {
-                finished.set(true);
-                synchronized (THREAD_LOCK) {
-                    THREAD_LOCK.notify();
+                try {
+                    continueSignal.await(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                    doneSignal.countDown();
+                } catch (InterruptedException e) {
+                    // All good!
                 }
             }
         }));
         binder.stopJob(params);
+        continueSignal.countDown();
 
-        synchronized (THREAD_LOCK) {
-            try {
-                THREAD_LOCK.wait(THREAD_WAIT_MS);
-            } catch (InterruptedException e) {
-                // Do nothing.
-            }
-        }
-        assertFalse(finished.get());
+        assertFalse(doneSignal.await(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     }
 
     @Test
-    public void testMultipleFinish() {
+    public void testMultipleFinish() throws InterruptedException {
         JobService.Binder binder =
                 (JobService.Binder) Robolectric.buildService(NoopAsyncJobService.class).create().get().onBind(null);
 
-        final AtomicInteger finished = new AtomicInteger(0);
-        for (int i = 0; i < 10; i++) {
-            JobParameters params = new JobParameters(
-                    this.params.getJobId() + i, this.params.getExtras(), this.params.getTransientExtras(), null,
-                    this.params.getTriggeredContentUris(), this.params.getTriggeredContentAuthorities(),
-                    this.params.isOverrideDeadlineExpired());
-            assertTrue(binder.startJob(params, new JobService.Binder.Callback() {
+        final CountDownLatch doneSignal = new CountDownLatch(PARALLEL_COUNT);
+        for (int i = 0; i < PARALLEL_COUNT; i++) {
+            JobParameters jobParams = new JobParameters(
+                    params.getJobId() + i, params.getExtras(), params.getTransientExtras(), null,
+                    params.getTriggeredContentUris(), params.getTriggeredContentAuthorities(),
+                    params.isOverrideDeadlineExpired());
+            assertTrue(binder.startJob(jobParams, new JobService.Binder.Callback() {
                 @Override
                 public void jobFinished(JobParameters params, boolean needsReschedule) {
-                    finished.incrementAndGet();
-                    synchronized (THREAD_LOCK) {
-                        THREAD_LOCK.notify();
-                    }
+                    doneSignal.countDown();
                 }
             }));
         }
 
-        for (int i = 0; i < 10; i++) {
-            synchronized (THREAD_LOCK) {
-                try {
-                    THREAD_LOCK.wait(THREAD_WAIT_MS);
-                } catch (InterruptedException e) {
-                    // Do nothing.
-                }
-            }
-        }
-        assertEquals(10, finished.get());
+        assertTrue(doneSignal.await(TIMEOUT_MS * Math.max(1, PARALLEL_COUNT / 4), TimeUnit.MILLISECONDS));
     }
 }

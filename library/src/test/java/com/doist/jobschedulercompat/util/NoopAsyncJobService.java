@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 public class NoopAsyncJobService extends JobService {
     public static final String EXTRA_DELAY = "delay";
 
-    private static final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+    private static final ScheduledExecutorService executor = Executors.newScheduledThreadPool(0);
     private static final SparseArray<ScheduledFuture> futures = new SparseArray<>();
 
     @Override
@@ -24,12 +24,12 @@ public class NoopAsyncJobService extends JobService {
             @Override
             public void run() {
                 jobFinished(params, false);
-                synchronized (NoopAsyncJobService.class) {
+                synchronized (futures) {
                     futures.remove(jobId);
                 }
             }
-        }, params.getExtras().getLong(EXTRA_DELAY), TimeUnit.MILLISECONDS);
-        synchronized (NoopAsyncJobService.class) {
+        }, Math.max(params.getExtras().getLong(EXTRA_DELAY), 1), TimeUnit.MILLISECONDS);
+        synchronized (futures) {
             futures.append(jobId, future);
         }
         return true;
@@ -38,27 +38,39 @@ public class NoopAsyncJobService extends JobService {
     @Override
     public boolean onStopJob(JobParameters params) {
         int jobId = params.getJobId();
-        futures.get(jobId).cancel(true);
-        synchronized (NoopAsyncJobService.class) {
+        ScheduledFuture future;
+        synchronized (futures) {
+            future = futures.get(jobId);
             futures.remove(jobId);
+        }
+        if (future != null) {
+            future.cancel(true);
         }
         return false;
     }
 
     static void waitForJob(int jobId) {
+        ScheduledFuture future;
+        synchronized (futures) {
+            future = futures.get(jobId);
+        }
         try {
-            futures.get(jobId).get();
+            if (future != null) {
+                future.get();
+            }
         } catch (InterruptedException | ExecutionException e) {
             // Ignore.
         }
     }
 
     static void interruptJobs() {
-        synchronized (NoopAsyncJobService.class) {
-            for (int i = 0; i < futures.size(); i++) {
-                futures.valueAt(i).cancel(true);
-            }
+        SparseArray<ScheduledFuture> currentFutures;
+        synchronized (futures) {
+            currentFutures = futures.clone();
             futures.clear();
+        }
+        for (int i = 0; i < currentFutures.size(); i++) {
+            currentFutures.valueAt(i).cancel(true);
         }
     }
 }
