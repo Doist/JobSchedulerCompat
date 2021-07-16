@@ -10,6 +10,7 @@ import android.util.Log;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.Random;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -50,7 +51,8 @@ public class JobInfo {
 
     @IntDef({
             BACKOFF_POLICY_LINEAR,
-            BACKOFF_POLICY_EXPONENTIAL
+            BACKOFF_POLICY_EXPONENTIAL,
+            BACKOFF_POLICY_EXPONENTIAL_JITTER
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface BackoffPolicy {
@@ -61,6 +63,9 @@ public class JobInfo {
 
     /** @see android.app.job.JobInfo#BACKOFF_POLICY_EXPONENTIAL */
     public static final int BACKOFF_POLICY_EXPONENTIAL = 1;
+
+    /** Exponential Backoff with Jitter {@link #calculateBackoffWithJitter(long, int)}. */
+    public static final int BACKOFF_POLICY_EXPONENTIAL_JITTER = 2;
 
     /** Same as android.app.job.JobInfo#MIN_PERIOD_MILLIS */
     private static final long MIN_PERIOD_MILLIS = 15 * 60 * 1000L; // 15 minutes.
@@ -273,6 +278,19 @@ public class JobInfo {
     @RestrictTo(RestrictTo.Scope.LIBRARY)
     public boolean hasLateConstraint() {
         return hasLateConstraint;
+    }
+
+    /**
+     * Calculation of the value for {@value BACKOFF_POLICY_EXPONENTIAL_JITTER} to allow spreading
+     * out retries across time.
+     *
+     * @param initialDelay   initial value for the delay.
+     * @param currentAttempt current attempt.
+     * @return number of milliseconds until next retry.
+     */
+    public static long calculateBackoffWithJitter(long initialDelay, int currentAttempt) {
+        double delay = initialDelay * Math.pow(2, (currentAttempt - 1));
+        return (long) (new Random().nextFloat() * delay);
     }
 
     /** @see android.app.job.JobInfo.TriggerContentUri */

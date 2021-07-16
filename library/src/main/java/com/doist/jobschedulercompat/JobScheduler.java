@@ -149,6 +149,11 @@ public class JobScheduler {
                 delayMillis = initialBackoffMillis * backoffAttempts;
                 break;
 
+            case JobInfo.BACKOFF_POLICY_EXPONENTIAL_JITTER:
+                delayMillis =
+                        JobInfo.calculateBackoffWithJitter(initialBackoffMillis, backoffAttempts);
+                break;
+
             case JobInfo.BACKOFF_POLICY_EXPONENTIAL:
             default:
                 delayMillis = (long) Math.scalb(initialBackoffMillis, backoffAttempts - 1);
