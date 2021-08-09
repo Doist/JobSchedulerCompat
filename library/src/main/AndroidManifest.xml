@@ -14,6 +14,7 @@
 
         <service
             android:name=".scheduler.gcm.GcmJobService"
+            android:exported="true"
             android:permission="com.google.android.gms.permission.BIND_NETWORK_TASK_SERVICE">
             <intent-filter>
                 <action android:name="com.google.android.gms.gcm.ACTION_TASK_READY" />
@@ -26,6 +27,7 @@
 
         <receiver
             android:name=".scheduler.alarm.AlarmReceiver"
+            android:exported="false"
             android:enabled="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -37,6 +39,7 @@
 
         <receiver
             android:name=".scheduler.alarm.AlarmReceiver$BatteryReceiver"
+            android:exported="false"
             android:enabled="false">
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
@@ -48,6 +51,7 @@
 
         <receiver
             android:name=".scheduler.alarm.AlarmReceiver$StorageReceiver"
+            android:exported="false"
             android:enabled="false">
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_DEVICE_STORAGE_LOW" />
@@ -59,13 +63,15 @@
 
         <receiver
             android:name=".scheduler.alarm.AlarmReceiver$ConnectivityReceiver"
+            android:exported="false"
             android:enabled="false">
             <intent-filter>
                 <action android:name="android.net.conn.CONNECTIVITY_CHANGE" tools:ignore="BatteryLife" />
             </intent-filter>
         </receiver>
 
-        <receiver android:name=".job.JobGcReceiver">
+        <receiver android:name=".job.JobGcReceiver"
+            android:exported="false">
             <!-- Run before other boot receivers to ensure the job list is sane. -->
             <intent-filter android:priority="999">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
