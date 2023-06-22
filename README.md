@@ -1,3 +1,5 @@
+> **Warning**
+> JobSchedulerCompat isn't actively maintained. Consider using [WorkManager](https://developer.android.com/guide/background/persistent/getting-started).
 
 JobSchedulerCompat [![Build Status](https://dev.azure.com/doist/JobSchedulerCompat/_apis/build/status/Doist.JobSchedulerCompat?branchName=master)](https://dev.azure.com/doist/JobSchedulerCompat/_build/latest?definitionId=2&branchName=master)
 ==================
